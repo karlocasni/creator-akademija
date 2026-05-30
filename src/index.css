@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+@theme {
+  --color-creator-bg: #121216;
+  --color-creator-card: #1E1E26;
+  --color-creator-gold: #F6A845;
+  --color-creator-gold-dark: #D48B27;
+  --color-creator-gray: #2A2A35;
+
+  --color-background: var(--color-creator-bg);
+  --color-foreground: #FFFFFF;
+  --color-primary: var(--color-creator-gold);
+  --color-primary-foreground: #121216;
+  --color-secondary: var(--color-creator-card);
+  --color-secondary-foreground: #FFFFFF;
+  --color-accent: var(--color-creator-gray);
+  --color-accent-foreground: #FFFFFF;
+  --color-muted: var(--color-creator-gray);
+  --color-muted-foreground: #a1a1b2;
+  
+  --radius-xl: 16px;
+  --radius-2xl: 16px;
+  --radius-lg: 12px;
+
+  --font-sans: 'Poppins', sans-serif;
+  --font-heading: 'Poppins', sans-serif;
+  --font-marker: 'Caveat', cursive;
+  --font-permanent-marker: 'Permanent Marker', cursive;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-tap-highlight-color: transparent;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    text-transform: uppercase;
+    letter-spacing: -0.02em;
+    font-weight: 800;
+  }
+}
+
+@utility ursa-card {
+  background: rgba(30, 30, 38, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(246, 168, 69, 0.08);
+  border-radius: 16px;
+}
+
+@utility glass {
+  background-color: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+@utility text-gradient {
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  background-image: linear-gradient(135deg, var(--color-primary) 0%, #fff 100%);
+  filter: drop-shadow(0 0 30px rgba(246, 168, 69, 0.15));
+}
+
+@utility bg-noise {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.05;
+  pointer-events: none;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background-color: var(--color-background);
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-ursa-gray);
+  border-radius: 9999px;
+  border: 2px solid var(--color-background);
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-primary);
+}
+
