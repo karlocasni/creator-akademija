@@ -22,7 +22,7 @@ export default function Landing() {
   };
 
   return (
-    <div className="relative bg-[#121216] text-white overflow-x-hidden font-sans selection:bg-primary selection:text-black min-h-screen">
+    <div className="relative bg-background text-white overflow-x-hidden font-sans selection:bg-primary selection:text-black min-h-screen">
       {/* Global Grain/Noise Overlay */}
       <div className="fixed inset-0 bg-noise z-[100] pointer-events-none opacity-5" />
       
@@ -33,7 +33,7 @@ export default function Landing() {
       />
 
       {/* Header */}
-      <header className="fixed top-0 inset-x-0 z-[60] py-4 px-6 md:px-12 flex justify-between items-center bg-[#121216]/80 backdrop-blur-xl border-b border-white/5">
+      <header className="fixed top-0 inset-x-0 z-[60] py-4 px-6 md:px-12 flex justify-between items-center bg-background/80 backdrop-blur-xl border-b border-white/5">
         <div className="flex items-center gap-2">
           <span className="font-extrabold text-lg md:text-2xl tracking-tighter uppercase text-white flex items-center gap-2">
             CREATOR <span className="text-primary font-permanent-marker normal-case tracking-normal text-xl md:text-3xl">Akademija</span>
@@ -146,7 +146,7 @@ export default function Landing() {
             {...fadeIn}
             className="relative aspect-video w-full rounded-[2rem] overflow-hidden border border-white/10 shadow-2xl group"
           >
-            <div className="absolute inset-0 bg-[#121216]/50 flex items-center justify-center z-10 pointer-events-none group-hover:opacity-0 transition-opacity duration-300">
+            <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-10 pointer-events-none group-hover:opacity-0 transition-opacity duration-300">
               <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-black shadow-lg">
                 <Play className="w-6 h-6 fill-current ml-1" />
               </div>
