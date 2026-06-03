@@ -74,7 +74,7 @@ export default function Calendar() {
   };
 
   useEffect(() => {
-    if (selectedEvent) {
+    if (selectedEvent || showAddModal) {
       bottomNavEventTarget.dispatchEvent(new Event('hide'));
     } else {
       bottomNavEventTarget.dispatchEvent(new Event('show'));
@@ -82,7 +82,7 @@ export default function Calendar() {
     return () => {
       bottomNavEventTarget.dispatchEvent(new Event('show'));
     };
-  }, [selectedEvent]);
+  }, [selectedEvent, showAddModal]);
 
   const handleSaveEvent = async () => {
     if (!newEvent.title || !newEvent.date || !newEvent.speaker) return;
