@@ -59,13 +59,6 @@
   }
 }
 
-@utility hide-bottom-nav {
-  /* Used to hide bottom nav from specific components dynamically */
-}
-
-body.hide-bottom-nav #bottom-nav-container {
-  display: none !important;
-}
 
 @utility glass {
   background-color: rgba(255, 255, 255, 0.02);

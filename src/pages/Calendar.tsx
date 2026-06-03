@@ -6,6 +6,7 @@ import { collection, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firesto
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
+import { bottomNavEventTarget } from '../components/layout/BottomNav';
 
 interface CalendarEvent {
   id: string;
@@ -71,6 +72,17 @@ export default function Calendar() {
       setJustRsvpd(false);
     }, 4000);
   };
+
+  useEffect(() => {
+    if (selectedEvent) {
+      bottomNavEventTarget.dispatchEvent(new Event('hide'));
+    } else {
+      bottomNavEventTarget.dispatchEvent(new Event('show'));
+    }
+    return () => {
+      bottomNavEventTarget.dispatchEvent(new Event('show'));
+    };
+  }, [selectedEvent]);
 
   const handleSaveEvent = async () => {
     if (!newEvent.title || !newEvent.date || !newEvent.speaker) return;
@@ -254,13 +266,6 @@ export default function Calendar() {
       <AnimatePresence>
         {selectedEvent && (
           <>
-            <style>{`
-              #bottom-nav-container {
-                opacity: 0 !important;
-                transform: translateY(100px) !important;
-                pointer-events: none !important;
-              }
-            `}</style>
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
