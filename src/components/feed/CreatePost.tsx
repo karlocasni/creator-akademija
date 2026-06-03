@@ -4,29 +4,36 @@ import { useAuth } from '../../contexts/AuthContext';
 import PostModal from './PostModal';
 
 export default function CreatePost() {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const [showModal, setShowModal] = useState(false);
 
   if (!user) return null;
 
-  const avatarUrl =
-    profile?.avatar_url ||
-    `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile?.username || 'user'}`;
-
   return (
     <>
-      <div className="ursa-card flex items-center gap-3 p-3">
-        <img
-          src={avatarUrl}
-          className="w-9 h-9 rounded-full flex-shrink-0 object-cover"
-          alt="Moj avatar"
-        />
-        <button
+      <div className="px-4 mb-6">
+        <div 
+          className="bg-[#111116] p-6 cursor-text" 
+          style={{ borderRadius: '20px', boxShadow: 'rgba(245, 165, 0, 0.15) 0px 0px 15px' }}
           onClick={() => setShowModal(true)}
-          className="flex-1 bg-white/5 rounded-full px-4 py-2.5 text-muted-foreground text-sm cursor-pointer hover:bg-white/10 transition-colors text-left"
         >
-          Što ti je na umu, kreativče? Podijeli hook ili pobjedu...
-        </button>
+          <div className="mb-4">
+            <div className="w-full bg-[#1A1A22] border-none text-sm text-[#4A4A5A] rounded-xl p-4 min-h-[80px] flex items-start text-left cursor-text">
+              Što ti je na umu, kreativče? Podijeli hook ili pobjedu...
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <button 
+              className="bg-[#F5A500] text-[#0A0A0F] font-heading font-bold px-8 py-2.5 rounded-full text-sm uppercase tracking-wide hover:scale-105 active:scale-95 transition-transform"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowModal(true);
+              }}
+            >
+              Objavi
+            </button>
+          </div>
+        </div>
       </div>
 
       <AnimatePresence>

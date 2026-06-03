@@ -36,7 +36,7 @@ export default function Landing() {
       <header className="fixed top-0 inset-x-0 z-[60] py-4 px-6 md:px-12 flex justify-between items-center bg-background/80 backdrop-blur-xl border-b border-white/5">
         <div className="flex items-center gap-2">
           <span className="font-extrabold text-lg md:text-2xl tracking-tighter uppercase text-white flex items-center gap-2">
-            CREATOR <span className="text-primary font-permanent-marker normal-case tracking-normal text-xl md:text-3xl">Akademija</span>
+            CREATOR <span className="text-primary font-marker normal-case tracking-normal text-xl md:text-3xl">Akademija</span>
           </span>
         </div>
         <div className="flex items-center gap-4">
@@ -333,7 +333,7 @@ export default function Landing() {
       <footer className="py-16 px-6 border-t border-white/10 text-center text-muted-foreground bg-black/20">
         <div className="max-w-4xl mx-auto flex flex-col items-center gap-6">
           <span className="font-extrabold text-xl tracking-tighter uppercase text-white flex items-center gap-2">
-            CREATOR <span className="text-primary font-permanent-marker normal-case tracking-normal text-2xl">Akademija</span>
+            CREATOR <span className="text-primary font-marker normal-case tracking-normal text-2xl">Akademija</span>
           </span>
           <p className="text-xs max-w-sm leading-relaxed">
             Stani ispred kamere s punim samopouzdanjem. Razumi algoritme, emocije i stvori prepoznatljiv brand.

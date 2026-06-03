@@ -42,7 +42,6 @@ export default function Leaderboard() {
       },
       (err) => {
         console.warn('Leaderboard snapshot error:', err.code);
-        // Silently hide the leaderboard on permission or index errors
         setLoading(false);
         if (err.code !== 'permission-denied') {
           setError('Rang lista nedostupna');
@@ -52,31 +51,30 @@ export default function Leaderboard() {
     return unsubscribe;
   }, []);
 
-  // Don't render anything if permission denied — avoids visible errors
   if (!loading && error && entries.length === 0) {
     return null;
   }
 
   return (
-    <div className="glass rounded-3xl p-6 border border-white/5">
-      <h3 className="font-black text-xs uppercase tracking-widest text-muted-foreground mb-4">
+    <div className="py-8 w-full max-w-full">
+      <h2 className="text-[10px] uppercase font-mono tracking-widest text-[#8B8FA8] mb-6">
         Rang Lista
-      </h3>
+      </h2>
 
       {loading ? (
-        <div className="space-y-3">
+        <div className="space-y-[12px]">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="flex items-center gap-3 animate-pulse">
-              <div className="w-5 h-4 bg-white/10 rounded" />
-              <div className="w-8 h-8 rounded-full bg-white/10" />
-              <div className="flex-1 h-4 bg-white/10 rounded" />
+            <div key={i} className="flex items-center gap-[12px] p-[12px] animate-pulse">
+              <div className="w-[28px] h-[28px] rounded-full bg-[rgba(245,165,0,0.12)]" />
+              <div className="w-[36px] h-[36px] rounded-full bg-[#1A1A22]" />
+              <div className="flex-1 h-[14px] bg-[#1A1A22] rounded" />
             </div>
           ))}
         </div>
       ) : entries.length === 0 ? (
-        <p className="text-muted-foreground text-sm text-center py-4">Nema podataka</p>
+        <p className="text-[#8B8FA8] font-sans text-[14px] py-[4px]">Nema podataka</p>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {entries.map((entry, index) => {
             const avatarSrc =
               entry.avatar_url ||
@@ -85,32 +83,32 @@ export default function Leaderboard() {
               <Link 
                 key={entry.uid} 
                 to={currentUser?.uid === entry.uid ? '/profile' : `/profile/${entry.uid}`}
-                className="flex items-center gap-3 group hover:bg-white/5 p-1 rounded-xl transition-colors"
+                className="flex items-center gap-4 group"
               >
-                <span
-                  className={`w-5 text-center text-xs font-black shrink-0 ${
-                    index === 0
-                      ? 'text-yellow-400'
-                      : index === 1
-                        ? 'text-zinc-400'
-                        : index === 2
-                          ? 'text-amber-600'
-                          : 'text-muted-foreground'
-                  }`}
-                >
+                <div className="w-7 h-7 flex items-center justify-center rounded-full bg-[#F5A500]/15 text-[#F5A500] font-mono text-[14px] font-bold">
                   {index + 1}
-                </span>
-                <img
-                  src={avatarSrc}
-                  alt={entry.username}
-                  className="w-8 h-8 rounded-full border border-white/10 shrink-0 group-hover:border-primary/50 transition-colors"
-                  onError={(e) => {
-                    (e.currentTarget as HTMLImageElement).src =
-                      `https://api.dicebear.com/7.x/avataaars/svg?seed=${entry.username}`;
-                  }}
-                />
-                <span className="flex-1 font-bold text-sm truncate group-hover:text-primary transition-colors">{entry.username}</span>
-                <XPBadge xp={entry.xp} compact />
+                </div>
+                <div className="flex-1 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full ${index === 0 ? 'border-2 border-[#F5A500] p-[1px]' : ''}`}>
+                      <img
+                        src={avatarSrc}
+                        alt={entry.username}
+                        className="w-full h-full rounded-full object-cover group-hover:scale-105 transition-transform"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src =
+                            `https://api.dicebear.com/7.x/avataaars/svg?seed=${entry.username}`;
+                        }}
+                      />
+                    </div>
+                    <span className="font-heading text-sm text-white group-hover:text-[#F5A500] transition-colors">
+                      {entry.username}
+                    </span>
+                  </div>
+                  <div className="lvl-badge text-[10px]">
+                    LVL {entry.level}
+                  </div>
+                </div>
               </Link>
             );
           })}

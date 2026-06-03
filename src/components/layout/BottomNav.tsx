@@ -1,15 +1,14 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, PlaySquare, Sparkles, Calendar, Plus } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import PostModal from '../feed/PostModal';
 
 const navItems = [
-  { label: 'Zajednica', icon: Home, path: '/feed' },
-  { label: 'Tečajevi', icon: PlaySquare, path: '/lectures' },
-  { label: 'Alati', icon: Sparkles, path: '/tools' },
-  { label: 'Kalendar', icon: Calendar, path: '/calendar' },
+  { label: 'Zajednica', icon: 'home', path: '/feed' },
+  { label: 'Tečajevi', icon: 'play_circle', path: '/lectures' },
+  { label: 'Alati', icon: 'auto_awesome', path: '/tools' },
+  { label: 'Kalendar', icon: 'calendar_month', path: '/calendar' },
 ];
 
 export default function BottomNav() {
@@ -18,8 +17,9 @@ export default function BottomNav() {
 
   return (
     <>
-      <nav className="fixed bottom-0 left-0 right-0 h-20 bg-[#161616]/90 backdrop-blur-xl z-50 px-4 md:px-8 border-t border-white/5 pb-safe flex items-center justify-center">
-        <div className="max-w-md w-full flex justify-between items-center relative">
+      <div id="bottom-nav-container" className="fixed bottom-4 left-4 right-4 z-[100] flex justify-center pointer-events-none transition-all duration-300">
+        <nav className="bg-[#111116]/90 backdrop-blur-xl border border-white/5 rounded-full px-6 py-2 flex items-center justify-between w-full max-w-md shadow-2xl pointer-events-auto relative">
+          
           {/* First two nav items */}
           {navItems.slice(0, 2).map((item) => {
             const isActive = location.pathname === item.path;
@@ -28,42 +28,35 @@ export default function BottomNav() {
                 key={item.path}
                 to={item.path}
                 className={cn(
-                  'flex flex-col items-center gap-1 transition-all flex-1',
-                  isActive ? 'text-primary' : 'text-white/50 hover:text-white/80',
+                  "flex flex-col items-center justify-center transition-all duration-300",
+                  isActive ? "text-[#F5A500]" : "text-[#8B8FA8] hover:text-white"
                 )}
+                title={item.label}
               >
-                <div className="relative p-1.5 flex flex-col items-center">
-                  <item.icon
-                    className={cn(
-                      'w-6 h-6 transition-all duration-300',
-                      isActive
-                        ? 'stroke-[2.5px] drop-shadow-[0_0_8px_rgba(212,255,0,0.5)]'
-                        : 'stroke-2',
-                    )}
-                  />
-                  {isActive && (
-                    <motion.div
-                      layoutId="bottom-nav-indicator"
-                      className="absolute -bottom-2 w-1 h-1 rounded-full bg-primary"
-                    />
-                  )}
+                <div className={cn(
+                  "flex items-center justify-center p-2 rounded-full",
+                  isActive ? "bg-[#F5A500]/10 shadow-[0_0_15px_rgba(245,165,0,0.3)]" : ""
+                )}>
+                  <span 
+                    className="material-symbols-outlined" 
+                    style={isActive ? { fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" } : {}}
+                  >
+                    {item.icon}
+                  </span>
                 </div>
-                <span className="text-[10px] font-medium tracking-wide">{item.label}</span>
               </Link>
             );
           })}
 
           {/* Center FAB */}
-          <div className="relative -top-5 flex flex-col items-center justify-center z-50 flex-shrink-0">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+          <div className="relative flex flex-col items-center justify-center -translate-y-6">
+            <button
               onClick={() => setShowModal(true)}
               aria-label="Nova objava"
-              className="w-14 h-14 rounded-full bg-primary flex items-center justify-center shadow-lg shadow-[0_0_20px_rgba(212,255,0,0.3)] hover:shadow-[0_0_30px_rgba(212,255,0,0.5)] transition-shadow"
+              className="w-14 h-14 bg-[#F5A500] rounded-full flex items-center justify-center shadow-[0_8px_20px_rgba(245,165,0,0.4)] text-[#0A0A0F] active:scale-95 transition-transform"
             >
-              <Plus className="w-7 h-7 text-black stroke-[2.5px]" />
-            </motion.button>
+              <span className="material-symbols-outlined text-3xl font-bold">add</span>
+            </button>
           </div>
 
           {/* Last two nav items */}
@@ -74,32 +67,28 @@ export default function BottomNav() {
                 key={item.path}
                 to={item.path}
                 className={cn(
-                  'flex flex-col items-center gap-1 transition-all flex-1',
-                  isActive ? 'text-primary' : 'text-white/50 hover:text-white/80',
+                  "flex flex-col items-center justify-center transition-all duration-300",
+                  isActive ? "text-[#F5A500]" : "text-[#8B8FA8] hover:text-white"
                 )}
+                title={item.label}
               >
-                <div className="relative p-1.5 flex flex-col items-center">
-                  <item.icon
-                    className={cn(
-                      'w-6 h-6 transition-all duration-300',
-                      isActive
-                        ? 'stroke-[2.5px] drop-shadow-[0_0_8px_rgba(212,255,0,0.5)]'
-                        : 'stroke-2',
-                    )}
-                  />
-                  {isActive && (
-                    <motion.div
-                      layoutId="bottom-nav-indicator"
-                      className="absolute -bottom-2 w-1 h-1 rounded-full bg-primary"
-                    />
-                  )}
+                <div className={cn(
+                  "flex items-center justify-center p-2 rounded-full",
+                  isActive ? "bg-[#F5A500]/10 shadow-[0_0_15px_rgba(245,165,0,0.3)]" : ""
+                )}>
+                  <span 
+                    className="material-symbols-outlined" 
+                    style={isActive ? { fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" } : {}}
+                  >
+                    {item.icon}
+                  </span>
                 </div>
-                <span className="text-[10px] font-medium tracking-wide">{item.label}</span>
               </Link>
             );
           })}
-        </div>
-      </nav>
+          
+        </nav>
+      </div>
 
       <AnimatePresence>
         {showModal && <PostModal isOpen={showModal} onClose={() => setShowModal(false)} />}

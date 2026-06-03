@@ -30,6 +30,7 @@ import { cn } from '../../lib/utils';
 import CommentSection from './CommentSection';
 import { awardXP } from '../../lib/xp';
 import { createNotification } from '../../lib/notifications';
+import XPBadge from '../ui/XPBadge';
 
 function renderWithMentions(content: string): React.ReactNode {
   const parts = content.split(/(@\w+)/g);
@@ -206,76 +207,67 @@ export default function PostCard({ post }: PostCardProps) {
   const profilePath = user?.uid === post.authorId ? '/profile' : `/profile/${post.authorId}`;
 
   return (
-    <div
+    <article
       className={cn(
-        'ursa-card overflow-hidden transition-colors hover:border-primary/50',
-        deleting && 'opacity-50 grayscale pointer-events-none',
+        'bg-[#111116] border border-[rgba(255,255,255,0.06)] rounded-[20px] overflow-hidden post-card flex flex-col',
+        deleting && 'opacity-50 grayscale pointer-events-none'
       )}
     >
-      {/* Compact header */}
-      <div className="p-4 flex items-center gap-3">
-        <Link to={profilePath} className="flex-shrink-0">
-          <img
-            src={currentAvatar || dicebearUrl}
-            className="w-9 h-9 rounded-full border border-white/10 object-cover hover:border-primary/50 transition-colors"
-            alt={currentName}
-            onError={(e) => {
-              (e.currentTarget as HTMLImageElement).src = dicebearUrl;
-            }}
-          />
-        </Link>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <Link
-              to={profilePath}
-              className="font-bold text-sm hover:text-primary transition-colors leading-none"
-            >
-              {currentName}
+      <div className="p-4">
+        {/* POST HEADER */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <Link to={profilePath} className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
+              <img
+                src={currentAvatar || dicebearUrl}
+                className="w-full h-full object-cover"
+                alt={currentName}
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = dicebearUrl;
+                }}
+              />
             </Link>
-            <span className="text-muted-foreground text-xs">·</span>
-            <span className="text-muted-foreground text-xs">
-              {formatRelativeTime(post.createdAt)}
-            </span>
-            {post.pinned && (
-              <span className="inline-flex items-center gap-1 bg-primary/20 text-primary text-[10px] px-2 py-0.5 rounded font-bold">
-                <Pin size={10} />
-                PRIKVAČENO
+            <div className="flex flex-col">
+              <div className="flex items-center gap-[6px]">
+                <Link
+                  to={profilePath}
+                  className="font-heading font-[700] text-[15px] text-[#FFFFFF] hover:text-[#F5A500] transition-colors leading-tight"
+                >
+                  {currentName}
+                </Link>
+                {post.pinned && (
+                  <span className="inline-flex items-center gap-[2px] bg-[#F5A500]/20 text-[#F5A500] text-[10px] px-[6px] py-[2px] rounded font-bold">
+                    <Pin size={10} />
+                  </span>
+                )}
+              </div>
+              <span className="font-mono text-[11px] text-[#4A4A5A] uppercase">
+                {formatRelativeTime(post.createdAt)}
               </span>
-            )}
+            </div>
           </div>
-          {post.category && (
-            <span className="text-[10px] text-muted-foreground font-medium mt-0.5 block">
-              {post.category}
-            </span>
-          )}
-        </div>
 
-        <div className="flex items-center gap-1 flex-shrink-0">
-          {user && user.uid !== post.authorId && (
-            <button
-              onClick={initDM}
-              className="p-1.5 text-muted-foreground hover:text-primary transition-colors rounded-full hover:bg-white/5"
-            >
-              <MessageCircle className="w-4 h-4" />
-            </button>
-          )}
-          <div className="relative">
-            <button
-              onClick={() => setShowOptions(!showOptions)}
-              className="p-1.5 text-muted-foreground hover:text-white transition-colors"
-            >
-              <MoreHorizontal className="w-5 h-5" />
-            </button>
+          <div className="flex items-center gap-2">
+            <div className="lvl-badge text-[11px]">
+              LVL {(cachedProfile as any)?.level ?? 1}
+            </div>
+            
+            <div className="relative">
+              <button
+                onClick={() => setShowOptions(!showOptions)}
+                className="text-[#4A4A5A] hover:text-[#FFFFFF] transition-colors p-[4px]"
+              >
+                <MoreHorizontal className="w-[20px] h-[20px]" />
+              </button>
 
-            {showOptions && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setShowOptions(false)} />
-                  <div className="absolute right-0 top-full mt-2 w-52 glass border border-white/10 rounded-2xl p-2 z-20 shadow-2xl animate-in fade-in slide-in-from-top-2">
+              {showOptions && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowOptions(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-52 bg-[#1A1A22] border border-[rgba(255,255,255,0.06)] rounded-[16px] p-2 z-20 shadow-2xl animate-in fade-in slide-in-from-top-2">
                     {profile?.isAdmin && (
                       <button
                         onClick={handleTogglePin}
-                        className="w-full text-left px-4 py-2 text-sm text-primary hover:bg-primary/10 rounded-xl transition-colors font-bold flex items-center gap-2"
+                        className="w-full text-left px-4 py-2 text-sm text-[#F5A500] hover:bg-[#F5A500]/10 rounded-xl transition-colors font-bold flex items-center gap-2"
                       >
                         <Pin className="w-3.5 h-3.5" />
                         {post.pinned ? 'Otkvači objavu' : 'Prikvači objavu'}
@@ -285,13 +277,13 @@ export default function PostCard({ post }: PostCardProps) {
                       <>
                         <button
                           onClick={handleDelete}
-                          className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 rounded-xl transition-colors font-bold"
+                          className="w-full text-left px-4 py-2 text-sm text-[#EF4444] hover:bg-[#EF4444]/10 rounded-xl transition-colors font-bold"
                         >
                           Obriši objavu {profile?.isAdmin && user?.uid !== post.authorId && '(Admin)'}
                         </button>
                         {user?.uid !== post.authorId && (
                           <button
-                            className="w-full text-left px-4 py-2 text-sm text-white/70 hover:bg-white/5 rounded-xl transition-colors mt-1"
+                            className="w-full text-left px-4 py-2 text-sm text-[#8B8FA8] hover:bg-[rgba(255,255,255,0.05)] rounded-xl transition-colors mt-1"
                             onClick={() => setShowOptions(false)}
                           >
                             Prijavi objavu
@@ -300,104 +292,97 @@ export default function PostCard({ post }: PostCardProps) {
                       </>
                     ) : (
                       <button
-                        className="w-full text-left px-4 py-2 text-sm text-white/70 hover:bg-white/5 rounded-xl transition-colors"
+                        className="w-full text-left px-4 py-2 text-sm text-[#8B8FA8] hover:bg-[rgba(255,255,255,0.05)] rounded-xl transition-colors"
                         onClick={() => setShowOptions(false)}
                       >
                         Prijavi objavu
                       </button>
                     )}
                   </div>
-              </>
-            )}
+                </>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Text content — always full width */}
-      <div className="px-4 pb-2">
-        {post.title ? (
-          <>
-            <h2 className="font-heading font-black text-base uppercase leading-tight mb-1">
+        {/* POST CONTENT */}
+        <div className="font-sans text-[15px] leading-[1.6] text-white/90">
+          {post.title && (
+            <h2 className="font-heading font-[700] text-[16px] uppercase mb-[4px] text-[#FFFFFF]">
               {renderWithMentions(post.title)}
             </h2>
-            <p className="text-sm text-muted-foreground">
-              {renderWithMentions(post.content)}
-            </p>
-          </>
-        ) : (
-          <p className="text-foreground/90 text-sm leading-relaxed whitespace-pre-wrap">
+          )}
+          <p className="whitespace-pre-wrap">
             {renderWithMentions(post.content)}
           </p>
+        </div>
+
+        {/* MEDIA */}
+        {post.imageUrl && (
+          <div className="mt-4">
+            <img
+              src={post.imageUrl}
+              className="w-full max-h-[480px] rounded-[12px] object-contain bg-[#0A0A0F]"
+              loading="lazy"
+              alt="Post slika"
+            />
+          </div>
+        )}
+        {post.videoUrl && (
+          <div className="mt-4">
+            <video
+              src={`${post.videoUrl}#t=0.001`}
+              className="w-full max-h-[480px] rounded-[12px] bg-[#0A0A0F]"
+              controls
+              playsInline
+              preload="metadata"
+              style={{ objectFit: 'contain' }}
+              onPlay={(e) => { (e.currentTarget as HTMLVideoElement).muted = false; }}
+            />
+          </div>
         )}
       </div>
 
-      {/* Media — full width below text */}
-      {post.imageUrl && (
-        <div className="px-4 pb-3">
-          <img
-            src={post.imageUrl}
-            className="w-full max-h-[480px] rounded-xl object-contain bg-black/30"
-            loading="lazy"
-            alt="Post slika"
-          />
-        </div>
-      )}
-      {post.videoUrl && (
-        <div className="px-4 pb-3">
-          <video
-            src={`${post.videoUrl}#t=0.001`}
-            className="w-full max-h-[480px] rounded-xl bg-black"
-            controls
-            playsInline
-            preload="metadata"
-            style={{ objectFit: 'contain' }}
-            onPlay={(e) => { (e.currentTarget as HTMLVideoElement).muted = false; }}
-          />
-        </div>
-      )}
+      {/* POST ACTIONS */}
+      <div className="px-4 py-3 border-t border-[rgba(255,255,255,0.06)] flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={toggleLike}
+            disabled={!user || likeLoading}
+            className={cn(
+              'flex items-center gap-1.5 transition-colors duration-200 cursor-pointer disabled:opacity-50',
+              isLiked ? 'text-[#F5A500]' : 'text-[#8B8FA8] hover:text-[#F5A500]'
+            )}
+          >
+            <span className="text-sm">🔥</span>
+            <span className="font-mono text-[12px]">{likes.length}</span>
+          </button>
 
-      {/* Footer */}
-      <div className="px-4 py-3 flex items-center gap-4 border-t border-white/5">
-        <button
-          onClick={toggleLike}
-          disabled={!user || likeLoading}
-          className={cn(
-            'flex items-center gap-1.5 transition-all disabled:opacity-50 text-sm font-black',
-            isLiked ? 'text-primary' : 'text-muted-foreground hover:text-white',
-          )}
-        >
-          <Flame className={cn('w-4 h-4', isLiked && 'fill-current')} />
-          {likes.length}
-        </button>
-
-        <button
-          onClick={() => setShowComments((prev) => !prev)}
-          className={cn(
-            'flex items-center gap-1.5 transition-colors text-sm font-black',
-            showComments ? 'text-primary' : 'text-muted-foreground hover:text-white',
-          )}
-        >
-          <MessageSquare className="w-4 h-4" />
-          {post.commentsCount ?? 0}
-        </button>
+          <button
+            onClick={() => setShowComments((prev) => !prev)}
+            className={cn(
+              'flex items-center gap-1.5 transition-colors duration-200 cursor-pointer',
+              showComments ? 'text-[#F5A500]' : 'text-[#8B8FA8] hover:text-[#F5A500]'
+            )}
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span className="font-mono text-[12px]">{post.commentsCount ?? 0}</span>
+          </button>
+        </div>
 
         <button
           onClick={handleShare}
-          className="p-1 text-muted-foreground hover:text-white transition-colors ml-auto"
+          className="text-[#8B8FA8] hover:text-[#F5A500] transition-colors duration-200 cursor-pointer"
         >
-          <Share2 className="w-4 h-4" />
+          <Share2 className="w-[18px] h-[18px]" />
         </button>
-
-        <span className="text-primary text-xs font-medium">
-          {formatRelativeTime(post.createdAt)}
-        </span>
       </div>
 
       {showComments && (
-        <div className="px-4 pb-4 border-t border-white/5">
+        <div className="px-[16px] pb-[16px]">
           <CommentSection postId={post.id} postAuthorId={post.authorId} />
         </div>
       )}
-    </div>
+    </article>
   );
 }

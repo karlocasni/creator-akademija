@@ -24,6 +24,7 @@ export default function Lectures() {
   const [selectedLecture, setSelectedLecture] = useState<Lecture | null>(null);
   const [notifying, setNotifying] = useState(false);
   const [lectures, setLectures] = useState<Lecture[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>('SVE');
   const [showAddModal, setShowAddModal] = useState(false);
   const [newCourse, setNewCourse] = useState<Partial<Lecture>>({});
   const [uploading, setUploading] = useState(false);
@@ -237,91 +238,155 @@ export default function Lectures() {
     );
   }
 
+  const categories = ['SVE', ...Array.from(new Set(lectures.map(l => l.category)))];
+  const filteredLectures = selectedCategory === 'SVE' ? lectures : lectures.filter(l => l.category === selectedCategory);
+  
+  const featuredCourse = filteredLectures.length > 0 ? filteredLectures[0] : null;
+  const regularCourses = filteredLectures.length > 1 ? filteredLectures.slice(1) : [];
+
   return (
-    <div className="p-4 md:p-10 max-w-5xl mx-auto pb-24">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
-        <div>
-          <h1 className="text-3xl md:text-5xl font-black tracking-tighter uppercase text-white mb-2">
-            CREATOR <span className="text-primary font-permanent-marker normal-case tracking-normal">Akademija</span>
-          </h1>
-          <p className="text-muted-foreground text-xs uppercase tracking-widest max-w-md leading-relaxed mt-1">
-            Nauči kako postati prepoznatljiv brend i gospodariti algoritmima društvenih mreža.
-          </p>
-        </div>
+    <div className="flex flex-col w-full max-w-full overflow-hidden pb-[24px]">
+      {/* 2. PAGE HERO SECTION */}
+      <div className="pt-[24px] px-[16px] flex flex-col">
+        <h1 className="font-heading font-[800] text-[28px] text-[#FFFFFF] leading-[1.1] mb-[4px] uppercase flex items-center gap-2">
+          <span>CREATOR</span>
+          <span className="text-[#F5A500] font-marker font-normal tracking-normal mt-1">AKADEMIJA</span>
+        </h1>
+        <p className="font-sans font-[400] text-[14px] text-[#8B8FA8]">
+          Nauči kako postati prepoznatljiv brend i gospodariti algoritmima.
+        </p>
+
         {profile?.isAdmin && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-[8px] mt-[16px]">
             <button
               onClick={() => {
                 setEditCourseId(null);
                 setNewCourse({});
                 setShowAddModal(true);
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-black rounded-full font-black text-xs hover:scale-105 transition-transform"
+              className="flex items-center gap-[8px] px-[16px] py-[8px] bg-[#F5A500] text-[#0A0A0F] rounded-full font-heading font-[700] text-[12px] hover:scale-105 transition-transform"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="w-[14px] h-[14px]" />
               Dodaj Lekciju
             </button>
             <button
               onClick={notifyAll}
               disabled={notifying}
-              className="flex items-center gap-2 px-4 py-2 bg-white/5 text-white rounded-full font-black text-xs hover:bg-white/10 transition-colors disabled:opacity-50"
+              className="flex items-center gap-[8px] px-[16px] py-[8px] bg-[rgba(255,255,255,0.05)] text-[#FFFFFF] rounded-full font-heading font-[700] text-[12px] hover:bg-[rgba(255,255,255,0.1)] transition-colors disabled:opacity-50"
             >
-              <Bell className="w-3.5 h-3.5" />
+              <Bell className="w-[14px] h-[14px]" />
               {notifying ? 'Slanje...' : 'Obavijesti članove'}
             </button>
           </div>
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {lectures.map((l) => {
+      {/* 3. CATEGORY FILTER TABS */}
+      <div className="py-[16px] pl-[16px] flex gap-[8px] overflow-x-auto scrollbar-hidden">
+        {categories.map(cat => (
+          <button
+            key={cat}
+            onClick={() => setSelectedCategory(cat)}
+            className={cn(
+              "px-[18px] py-[8px] rounded-full font-sans font-[600] text-[13px] border-[1.5px] cursor-pointer whitespace-nowrap transition-colors",
+              selectedCategory === cat
+                ? "bg-[rgba(245,165,0,0.12)] border-[#F5A500] text-[#F5A500]"
+                : "bg-transparent border-[rgba(255,255,255,0.06)] text-[#8B8FA8]"
+            )}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+
+      {/* 4. FEATURED COURSE */}
+      {featuredCourse && (
+        <div 
+          className="mx-[16px] mb-[12px] rounded-[20px] overflow-hidden relative group cursor-pointer"
+          onClick={() => {
+            if (!isLocked(featuredCourse.daysToUnlock)) {
+              setSelectedLecture(featuredCourse);
+            }
+          }}
+        >
+          {profile?.isAdmin && (
+            <div className="absolute top-[16px] right-[16px] z-30 flex gap-[8px]">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditCourseId(featuredCourse.id);
+                  setNewCourse(featuredCourse);
+                  setShowAddModal(true);
+                }}
+                className="bg-[#0A0A0F]/60 backdrop-blur-md text-[#FFFFFF] text-[10px] font-heading font-[800] px-[12px] py-[6px] rounded-full hover:bg-[#F5A500] hover:text-[#0A0A0F] transition-colors uppercase"
+              >
+                Uredi
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteCourse(featuredCourse.id);
+                }}
+                className="bg-[#EF4444]/60 backdrop-blur-md text-[#FFFFFF] text-[10px] font-heading font-[800] px-[12px] py-[6px] rounded-full hover:bg-[#EF4444] transition-colors uppercase"
+              >
+                Obriši
+              </button>
+            </div>
+          )}
+
+          <img 
+            src={featuredCourse.thumbnail} 
+            className={cn("w-full h-[180px] object-cover transition-transform duration-700 group-hover:scale-105", isLocked(featuredCourse.daysToUnlock) && "opacity-60 grayscale")} 
+            alt={featuredCourse.title} 
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[rgba(10,10,15,0.3)] to-[rgba(10,10,15,0.95)]" />
+          
+          {isLocked(featuredCourse.daysToUnlock) ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
+              <Lock className="w-[40px] h-[40px] mb-[12px] text-[#FFFFFF]/50" />
+              <span className="text-[12px] font-sans font-[700] uppercase bg-[#0A0A0F]/50 text-[#FFFFFF]/80 px-[16px] py-[6px] rounded-full backdrop-blur-md">
+                {getTimeRemaining(featuredCourse.daysToUnlock)}
+              </span>
+            </div>
+          ) : (
+            <div className="absolute inset-0 bg-[#F5A500]/0 group-hover:bg-[#F5A500]/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 z-10">
+              <div className="w-[64px] h-[64px] bg-[#F5A500] rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(245,165,0,0.5)] transform scale-50 group-hover:scale-100 transition-transform duration-300">
+                <Play className="w-[32px] h-[32px] text-[#0A0A0F] fill-current ml-[4px]" />
+              </div>
+            </div>
+          )}
+
+          <div className="absolute bottom-0 w-full p-[16px] flex flex-col items-start z-10">
+            <span className="tag-category mb-[8px] bg-[rgba(245,165,0,0.12)] text-[#F5A500]">{featuredCourse.category}</span>
+            <h2 className="font-heading font-[700] text-[24px] text-[#FFFFFF] leading-tight line-clamp-2">
+              {featuredCourse.title}
+            </h2>
+            <div className="flex items-center gap-[6px] mt-[8px]">
+              <Clock className="w-[14px] h-[14px] text-[#4A4A5A]" />
+              <span className="font-mono text-[11px] text-[#4A4A5A]">{featuredCourse.duration}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. COURSE LIST */}
+      <div className="flex flex-col gap-[12px] px-[16px]">
+        {regularCourses.map((l) => {
           const locked = isLocked(l.daysToUnlock);
           return (
             <div
               key={l.id}
               onClick={() => {
-                if (!locked) {
-                  setSelectedLecture(l);
-                  // Award +100 XP for first view!
-                  const completedKey = `creator_mock_lecture_completed_${l.id}`;
-                  if (!localStorage.getItem(completedKey)) {
-                    localStorage.setItem(completedKey, 'true');
-                    if (profile && updateLocalProfile) {
-                      updateLocalProfile({ xp: profile.xp + 100 });
-                      alert('🎉 Čestitamo! Osvojio si +100 Creator XP za započinjanje lekcije!');
-                    }
-                  }
-                }
+                if (!locked) setSelectedLecture(l);
               }}
               className={cn(
-                'ursa-card flex flex-col overflow-hidden group transition-all',
-                locked
-                  ? 'opacity-60 grayscale cursor-not-allowed'
-                  : 'cursor-pointer hover:shadow-[0_0_30px_rgba(246,168,69,0.2)]',
+                "bg-[#111116] rounded-[16px] border border-[rgba(255,255,255,0.06)] flex items-center gap-[14px] p-[14px] overflow-hidden transition-colors cursor-pointer group",
+                locked ? "opacity-60 grayscale cursor-not-allowed" : "hover:border-[#F5A500]/50"
               )}
             >
-              <div className="relative aspect-video overflow-hidden">
-                <img 
-                  src={l.thumbnail} 
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
-                  alt="" 
-                />
-                {locked ? (
-                  <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center z-10">
-                    <Lock className="w-10 h-10 mb-3 text-white/50" />
-                    <span className="text-xs font-black uppercase bg-black/50 text-white/80 px-4 py-1.5 rounded-full backdrop-blur-md">
-                      {getTimeRemaining(l.daysToUnlock)}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="absolute inset-0 bg-primary/0 group-hover:bg-primary/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 z-10">
-                    <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(212,255,0,0.5)] transform scale-50 group-hover:scale-100 transition-transform duration-300">
-                      <Play className="w-8 h-8 text-black fill-current ml-1" />
-                    </div>
-                  </div>
-                )}
+              <div className="relative w-[90px] h-[70px] rounded-[12px] overflow-hidden flex-shrink-0">
                 {profile?.isAdmin && (
-                  <div className="absolute top-4 right-4 z-30 flex gap-2">
+                  <div className="absolute top-[4px] right-[4px] z-30 flex flex-col gap-[4px]">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -329,7 +394,7 @@ export default function Lectures() {
                         setNewCourse(l);
                         setShowAddModal(true);
                       }}
-                      className="bg-black/60 backdrop-blur-md text-white text-[10px] font-black px-3 py-1.5 rounded-full hover:bg-primary hover:text-black transition-colors uppercase"
+                      className="bg-[#0A0A0F]/60 backdrop-blur-md text-[#FFFFFF] text-[8px] font-heading font-[800] px-[6px] py-[2px] rounded-full hover:bg-[#F5A500] hover:text-[#0A0A0F] transition-colors uppercase"
                     >
                       Uredi
                     </button>
@@ -338,29 +403,40 @@ export default function Lectures() {
                         e.stopPropagation();
                         handleDeleteCourse(l.id);
                       }}
-                      className="bg-red-500/60 backdrop-blur-md text-white text-[10px] font-black px-3 py-1.5 rounded-full hover:bg-red-500 transition-colors uppercase"
+                      className="bg-[#EF4444]/60 backdrop-blur-md text-[#FFFFFF] text-[8px] font-heading font-[800] px-[6px] py-[2px] rounded-full hover:bg-[#EF4444] transition-colors uppercase"
                     >
                       Obriši
                     </button>
                   </div>
                 )}
+                <img 
+                  src={l.thumbnail} 
+                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
+                  alt={l.title} 
+                />
+                {locked ? (
+                  <div className="absolute inset-0 bg-[#0A0A0F]/60 flex items-center justify-center">
+                    <Lock className="w-[20px] h-[20px] text-[#FFFFFF]/50" />
+                  </div>
+                ) : (
+                  <div className="absolute inset-0 bg-transparent group-hover:bg-[#0A0A0F]/20 flex items-center justify-center transition-colors">
+                    <Play className="w-[24px] h-[24px] text-[#FFFFFF] opacity-0 group-hover:opacity-100 fill-current" />
+                  </div>
+                )}
               </div>
               
-              <div className="p-6 flex flex-col flex-1 bg-white/5">
-                <div className="flex items-center gap-3 mb-3">
-                  <span className="text-[10px] font-black uppercase bg-primary text-black px-2 py-0.5 rounded-sm">
-                    {l.category}
-                  </span>
-                  <span className="text-xs text-white/70 flex items-center gap-1 font-semibold">
-                    <Clock className="w-3.5 h-3.5" />
-                    {l.duration}
-                  </span>
-                </div>
-                <h3 className="font-black text-xl mb-2 text-white group-hover:text-primary transition-colors leading-tight">
+              <div className="flex-1 overflow-hidden flex flex-col">
+                <span className="tag-category self-start mb-[6px] bg-[rgba(255,255,255,0.05)] text-[#8B8FA8]">{l.category}</span>
+                <h3 className="font-heading font-[700] text-[15px] text-[#FFFFFF] leading-[1.2] whitespace-nowrap overflow-hidden text-ellipsis">
                   {l.title}
                 </h3>
-                <p className="text-white/60 text-sm line-clamp-2 whitespace-pre-wrap">{l.description}</p>
+                <div className="flex items-center gap-[6px] mt-[6px]">
+                  <Clock className="w-[12px] h-[12px] text-[#4A4A5A]" />
+                  <span className="font-mono text-[11px] text-[#4A4A5A]">{locked ? getTimeRemaining(l.daysToUnlock) : l.duration}</span>
+                </div>
               </div>
+
+              <ChevronRight className="w-[20px] h-[20px] text-[#4A4A5A] flex-shrink-0" />
             </div>
           );
         })}

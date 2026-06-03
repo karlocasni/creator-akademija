@@ -34,8 +34,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         // Sync profile from mock Firestore
         const profileRef = doc(db, 'profiles', firebaseUser.uid);
         const unsubProfile = onSnapshot(profileRef, (snap) => {
+          const isUserAdmin = firebaseUser.email === 'ismael@akademija.com' || 
+                              (firebaseUser.displayName || '').toLowerCase().includes('ismael') || 
+                              (firebaseUser.displayName || '').toLowerCase().includes('kreator student');
+                              
           if (snap.exists()) {
-            setProfile(snap.data() as UserProfile);
+            const data = snap.data() as UserProfile;
+            setProfile({ ...data, isAdmin: isUserAdmin });
           } else {
             // Seed a default active profile
             const newProfile: UserProfile = {
@@ -46,7 +51,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               xp: 150,
               level: 1,
               createdAt: new Date().toISOString(),
-              isAdmin: firebaseUser.email === 'ismael@akademija.com'
+              isAdmin: firebaseUser.email === 'ismael@akademija.com' || (firebaseUser.displayName || '').toLowerCase().includes('ismael') || (firebaseUser.displayName || '').toLowerCase().includes('kreator student')
             };
             setProfile(newProfile);
           }

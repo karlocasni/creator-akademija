@@ -36,6 +36,12 @@ export default function Profile() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [bio, setBio] = useState('');
   const [gender, setGender] = useState<'male' | 'female'>('male');
+  
+  // Social states
+  const [instagram, setInstagram] = useState('');
+  const [tiktok, setTiktok] = useState('');
+  const [youtube, setYoutube] = useState('');
+  
   const [editOpen, setEditOpen] = useState(false);
   
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -66,6 +72,9 @@ export default function Profile() {
           setPhoneNumber(myProfile.phone_number || '');
           setBio(myProfile.bio || '');
           setGender(myProfile.gender || 'male');
+          setInstagram(myProfile.instagram || '');
+          setTiktok(myProfile.tiktok || '');
+          setYoutube(myProfile.youtube || '');
         }
       } else if (paramId) {
         setFetchingProfile(true);
@@ -113,7 +122,7 @@ export default function Profile() {
       if (!user?.uid) throw new Error('Korisnik nije prijavljen.');
       await setDoc(
         doc(db, 'profiles', user.uid),
-        { username, phone_number: phoneNumber, bio: bio.trim(), gender, updatedAt: new Date().toISOString() },
+        { username, phone_number: phoneNumber, bio: bio.trim(), gender, instagram: instagram.trim(), tiktok: tiktok.trim(), youtube: youtube.trim(), updatedAt: new Date().toISOString() },
         { merge: true },
       );
       showStatus('success', 'Profil uspješno ažuriran!');
@@ -243,6 +252,36 @@ export default function Profile() {
               </span>
             </div>
           )}
+
+          {/* SOCIAL ICONS (View & Own Profile) */}
+          {(viewedProfile?.instagram || viewedProfile?.tiktok || viewedProfile?.youtube) && (
+            <div className="flex items-center justify-center gap-3 mt-6">
+              {viewedProfile.instagram && (
+                <a href={`https://instagram.com/${viewedProfile.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-white/5 border border-white/10 hover:border-primary/50 flex items-center justify-center hover:scale-110 transition-all text-white hover:text-primary">
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+                </a>
+              )}
+              {viewedProfile.tiktok && (
+                <a href={`https://tiktok.com/@${viewedProfile.tiktok.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-white/5 border border-white/10 hover:border-primary/50 flex items-center justify-center hover:scale-110 transition-all text-white hover:text-primary">
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93v7.2c0 1.96-.5 3.9-1.5 5.56-1.14 1.83-3.1 3.12-5.26 3.4-2.18.29-4.52-.22-6.29-1.57-1.74-1.35-2.87-3.37-3.08-5.59-.2-2.22.42-4.51 1.82-6.25 1.34-1.63 3.33-2.67 5.43-2.84.4-.04.81-.04 1.21-.02v3.9c-.39-.02-.79-.04-1.18-.01-1.07.08-2.11.53-2.89 1.3-.77.78-1.22 1.83-1.26 2.92-.04 1.09.34 2.16 1.03 3.02.7.85 1.71 1.37 2.8 1.48 1.09.11 2.21-.21 3.09-.86.88-.65 1.42-1.61 1.56-2.69.14-1.07-.11-2.18-.7-3.09V.02h3.04z"/></svg>
+                </a>
+              )}
+              {viewedProfile.youtube && (
+                <a href={viewedProfile.youtube.startsWith('http') ? viewedProfile.youtube : `https://youtube.com/@${viewedProfile.youtube.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-white/5 border border-white/10 hover:border-primary/50 flex items-center justify-center hover:scale-110 transition-all text-white hover:text-primary">
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                </a>
+              )}
+              
+              {isOwnProfile && (
+                <button
+                  onClick={() => setEditOpen(true)}
+                  className="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-[10px] font-black uppercase tracking-widest hover:border-primary/50 hover:text-primary transition-colors h-10 ml-2"
+                >
+                  Uredi Mreže
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {isOwnProfile ? (
@@ -337,6 +376,51 @@ export default function Profile() {
                     <option value="male" className="bg-black text-white">Muško</option>
                     <option value="female" className="bg-black text-white">Žensko</option>
                   </select>
+                </div>
+
+                <div className="pt-6 border-t border-white/5">
+                  <h3 className="text-sm font-black uppercase text-white mb-4 tracking-widest">Moje Mreže</h3>
+                  
+                  <div className="space-y-4">
+                    <div className="space-y-2 text-left">
+                      <label className="text-xs font-black text-muted-foreground uppercase ml-1">
+                        Instagram
+                      </label>
+                      <input
+                        type="text"
+                        value={instagram}
+                        onChange={(e) => setInstagram(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 px-4 focus:border-primary focus:outline-none transition-colors text-white"
+                        placeholder="@korisničkoime"
+                      />
+                    </div>
+                    
+                    <div className="space-y-2 text-left">
+                      <label className="text-xs font-black text-muted-foreground uppercase ml-1">
+                        TikTok
+                      </label>
+                      <input
+                        type="text"
+                        value={tiktok}
+                        onChange={(e) => setTiktok(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 px-4 focus:border-primary focus:outline-none transition-colors text-white"
+                        placeholder="@korisničkoime"
+                      />
+                    </div>
+
+                    <div className="space-y-2 text-left">
+                      <label className="text-xs font-black text-muted-foreground uppercase ml-1">
+                        YouTube
+                      </label>
+                      <input
+                        type="text"
+                        value={youtube}
+                        onChange={(e) => setYoutube(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 px-4 focus:border-primary focus:outline-none transition-colors text-white"
+                        placeholder="Naziv kanala ili URL"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {statusMsg && (

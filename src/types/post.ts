@@ -45,6 +45,9 @@ export interface UserProfile {
     activity: number;
     goal: string;
   };
+  instagram?: string;
+  tiktok?: string;
+  youtube?: string;
 }
 
 export interface FirestorePost {

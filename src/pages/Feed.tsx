@@ -16,16 +16,13 @@ import { FirestorePost } from '../types/post';
 import PostCard from '../components/feed/PostCard';
 import CreatePost from '../components/feed/CreatePost';
 import SkeletonCard from '../components/ui/SkeletonCard';
+import CommunityTabs from '../components/layout/CommunityTabs';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 
 const PAGE_SIZE = 10;
 
-const SECONDARY_TABS = [
-  { label: 'Creator Hub', path: '/feed' },
-  { label: 'XP Rang Lista', path: '/leaderboard' },
-  { label: 'Kolege Kreatori', path: '/members' },
-];
+
 
 export default function Feed() {
   const { user: currentUser } = useAuth();
@@ -39,12 +36,21 @@ export default function Feed() {
   const [isSearchOpen, setIsSearchOpen] = useState(searchParams.get('search') === 'true');
   const [searchQuery, setSearchQuery] = useState('');
   const [challenges, setChallenges] = useState<any[]>([]);
+  const [activeMembers, setActiveMembers] = useState<any[]>([]);
   const lastDocRef = useRef<DocumentSnapshot | null>(null);
 
   useEffect(() => {
     const q = query(collection(db, 'challenges'));
     const unsub = onSnapshot(q, (snap) => {
       setChallenges(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    const q = query(collection(db, 'profiles'), orderBy('xp', 'desc'), limit(10));
+    const unsub = onSnapshot(q, (snap) => {
+      setActiveMembers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
     return unsub;
   }, []);
@@ -156,135 +162,99 @@ export default function Feed() {
   ];
 
   return (
-    <div className="flex flex-col">
-      {/* Desktop-only secondary bar — only visible on /feed */}
-      <header className="hidden md:flex items-center gap-4 px-6 py-3 glass sticky top-16 z-40">
-        {!isSearchOpen ? (
+    <div className="flex flex-col w-full max-w-full overflow-hidden">
+      {/* 2. SUB-NAVIGATION TABS */}
+      <CommunityTabs />
+
+      {/* 3. ACTIVE MEMBERS ROW */}
+      <section className="py-6">
+        <h2 className="px-4 mb-4 text-[11px] uppercase font-mono tracking-[0.1em] text-[#8B8FA8]" style={{ fontVariant: 'small-caps' }}>
+          Aktivni Danas
+        </h2>
+        <div className="flex gap-3 overflow-x-auto px-4 hide-scrollbar">
+          {activeMembers.map((member) => {
+            const avatarSrc = member.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${member.username}`;
+            return (
+              <Link to={`/profile/${member.id}`} key={member.id} className="flex flex-col items-center min-w-[60px] max-w-[60px]">
+                <div className="relative">
+                  <div className="w-14 h-14 rounded-full p-[2px] active-avatar">
+                    <img 
+                      src={avatarSrc} 
+                      alt={member.username} 
+                      className="w-full h-full rounded-full object-cover" 
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${member.username}`;
+                      }}
+                    />
+                  </div>
+                  <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-[#0A0A0F] rounded-full"></div>
+                </div>
+                <span className="mt-2 text-[11px] font-medium text-[#8B8FA8] truncate w-full text-center font-body">
+                  {member.username}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
+
+      <CreatePost />
+
+      {challenges.filter(c => c.active).map(c => (
+        <div key={c.id} className="mx-[16px] mb-[12px] p-4 border-l-4 border-l-primary bg-primary/5 flex items-start gap-4 rounded-r-xl border border-[rgba(255,255,255,0.06)] border-l-[rgba(245,165,0,1)]">
+          <div className="bg-primary/20 p-2 rounded-full mt-1">
+            <Trophy className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <span className="text-[10px] font-black uppercase text-primary tracking-widest block mb-1">Aktivni Izazov</span>
+            <h3 className="font-bold text-lg mb-1 leading-tight">{c.title}</h3>
+            <p className="text-sm text-muted-foreground">{c.description}</p>
+          </div>
+        </div>
+      ))}
+
+      <div className="flex flex-col gap-[12px] px-[16px]">
+        {loading ? (
           <>
-            <h1 className="text-2xl font-black tracking-tighter flex-shrink-0">CREATOR HUB</h1>
-
-            {/* Scrollable tabs */}
-            <div className="flex-1 flex items-end gap-0 overflow-x-auto scrollbar-none">
-              {SECONDARY_TABS.map((tab) => (
-                <Link
-                  key={tab.path}
-                  to={tab.path}
-                  className={cn(
-                    'whitespace-nowrap px-4 py-1.5 text-sm border-b-2 transition-colors flex-shrink-0',
-                    location.pathname === tab.path
-                      ? 'text-white font-bold border-primary'
-                      : 'text-white/50 hover:text-white border-transparent',
-                  )}
-                >
-                  {tab.label}
-                </Link>
-              ))}
-            </div>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
           </>
+        ) : error ? (
+          <div className="glass rounded-3xl p-10 text-center border border-red-500/20">
+            <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-3" />
+            <p className="text-red-400 text-sm mb-4 font-medium">{error}</p>
+            <button
+              onClick={handleRetry}
+              className="flex items-center gap-2 px-5 py-2 bg-primary text-black rounded-full font-black text-sm hover:opacity-90 transition-opacity mx-auto"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Pokušaj ponovo
+            </button>
+          </div>
+        ) : posts.length === 0 ? (
+          <div className="glass rounded-3xl p-12 text-center border border-white/5">
+            <p className="text-muted-foreground text-sm">Još nema objava. Budi prvi!</p>
+          </div>
         ) : (
-          <div className="flex-1 flex items-center gap-3 animate-in fade-in slide-in-from-left-4 duration-300">
-            <Search className="w-5 h-5 text-primary" />
-            <input
-              autoFocus
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Pretraži objave ili koristi @korisnik..."
-              className="flex-1 bg-transparent border-none focus:ring-0 text-sm placeholder:text-muted-foreground/50 text-white"
-            />
-            <button 
-              onClick={() => {
-                setIsSearchOpen(false);
-                setSearchQuery('');
-              }}
-              className="text-xs font-bold text-muted-foreground hover:text-white transition-colors"
-            >
-              ZATVORI
-            </button>
-          </div>
-        )}
-
-        {/* Right icons */}
-        <div className="flex items-center gap-3 flex-shrink-0">
-          {!isSearchOpen && (
-            <button 
-              onClick={() => setIsSearchOpen(true)}
-              className="p-1.5 hover:bg-white/10 rounded-full transition-colors text-muted-foreground hover:text-primary"
-            >
-              <Search className="w-5 h-5" />
-            </button>
-          )}
-          <Bell className="w-5 h-5 text-muted-foreground" />
-          <Link
-            to="/messages"
-            className="p-1.5 hover:bg-white/10 rounded-full transition-colors text-muted-foreground hover:text-primary"
-            title="Privatne poruke"
-          >
-            <Send className="w-5 h-5" />
-          </Link>
-        </div>
-      </header>
-
-      <div className="py-4 md:py-6 space-y-4">
-        <CreatePost />
-
-
-        {challenges.filter(c => c.active).map(c => (
-          <div key={c.id} className="ursa-card p-4 border-l-4 border-l-primary bg-primary/5 flex items-start gap-4">
-            <div className="bg-primary/20 p-2 rounded-full mt-1">
-              <Trophy className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <span className="text-[10px] font-black uppercase text-primary tracking-widest block mb-1">Aktivni Izazov</span>
-              <h3 className="font-bold text-lg mb-1 leading-tight">{c.title}</h3>
-              <p className="text-sm text-muted-foreground">{c.description}</p>
-            </div>
-          </div>
-        ))}
-
-        <div className="space-y-4">
-          {loading ? (
-            <>
-              <SkeletonCard />
-              <SkeletonCard />
-              <SkeletonCard />
-            </>
-          ) : error ? (
-            <div className="glass rounded-3xl p-10 text-center border border-red-500/20">
-              <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-3" />
-              <p className="text-red-400 text-sm mb-4 font-medium">{error}</p>
+          <>
+            {sortedPosts.map((post) => <PostCard key={post.id} post={post} />)}
+            {hasMore && !searchQuery && (
               <button
-                onClick={handleRetry}
-                className="flex items-center gap-2 px-5 py-2 bg-primary text-black rounded-full font-black text-sm hover:opacity-90 transition-opacity mx-auto"
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                className="w-full py-3 flex items-center justify-center gap-2 text-sm font-bold text-muted-foreground hover:text-white border border-[rgba(255,255,255,0.1)] hover:border-white/20 rounded-2xl transition-all disabled:opacity-50"
               >
-                <RefreshCw className="w-4 h-4" />
-                Pokušaj ponovo
+                {loadingMore ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
+                {loadingMore ? 'Učitavanje...' : 'Učitaj više'}
               </button>
-            </div>
-          ) : posts.length === 0 ? (
-            <div className="glass rounded-3xl p-12 text-center border border-white/5">
-              <p className="text-muted-foreground text-sm">Još nema objava. Budi prvi!</p>
-            </div>
-          ) : (
-            <>
-              {sortedPosts.map((post) => <PostCard key={post.id} post={post} />)}
-              {hasMore && !searchQuery && (
-                <button
-                  onClick={handleLoadMore}
-                  disabled={loadingMore}
-                  className="w-full py-3 flex items-center justify-center gap-2 text-sm font-bold text-muted-foreground hover:text-white border border-white/10 hover:border-white/20 rounded-2xl transition-all disabled:opacity-50"
-                >
-                  {loadingMore ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4" />
-                  )}
-                  {loadingMore ? 'Učitavanje...' : 'Učitaj više'}
-                </button>
-              )}
-            </>
-          )}
-        </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

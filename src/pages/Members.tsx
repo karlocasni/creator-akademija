@@ -6,6 +6,7 @@ import { db } from '../lib/firebase';
 import { UserProfile } from '../types/post';
 import XPBadge from '../components/ui/XPBadge';
 import { useAuth } from '../contexts/AuthContext';
+import CommunityTabs from '../components/layout/CommunityTabs';
 
 interface MemberEntry {
   uid: string;
@@ -109,10 +110,13 @@ export default function Members() {
   }, []);
 
   return (
-    <div className="py-6 px-4 md:px-0 space-y-4">
-      <div className="flex items-center gap-3 px-2">
-        <Users className="w-6 h-6 text-primary" />
-        <h1 className="font-heading font-black text-3xl uppercase tracking-tighter">ČLANOVI</h1>
+    <div className="flex flex-col w-full max-w-full overflow-hidden">
+      <CommunityTabs />
+      
+      <div className="py-2 px-4 md:px-0 space-y-4">
+        <div className="flex items-center gap-3 px-2">
+          <Users className="w-6 h-6 text-primary" />
+          <h1 className="font-heading font-black text-3xl uppercase tracking-tighter">ČLANOVI</h1>
         {!loading && (
           <span className="text-xs font-bold ml-auto flex items-center gap-2">
             <span className="px-2 py-0.5 bg-primary/15 text-primary rounded-full border border-primary/30">
@@ -197,6 +201,7 @@ export default function Members() {
           })}
         </div>
       )}
+    </div>
     </div>
   );
 }
