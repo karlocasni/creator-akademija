@@ -192,9 +192,9 @@ export default function Calendar() {
         {profile?.isAdmin && !selectedEvent && (
           <button 
             onClick={() => setShowAddModal(true)}
-            className="w-[40px] h-[40px] rounded-full bg-[#F5A500] text-[#0A0A0F] flex items-center justify-center hover:scale-105 transition-transform shadow-[0_0_15px_rgba(245,165,0,0.4)]"
+            className="w-[48px] h-[48px] rounded-full bg-[#F5A500] text-[#0A0A0F] flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-[0_0_20px_rgba(245,165,0,0.6),0_0_40px_rgba(245,165,0,0.3)]"
           >
-            <Plus className="w-[20px] h-[20px]" />
+            <Plus className="w-[24px] h-[24px] font-black" strokeWidth={3} />
           </button>
         )}
       </div>
@@ -381,16 +381,32 @@ export default function Calendar() {
       {/* ADMIN ADD MODAL */}
       <AnimatePresence>
         {showAddModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-[16px]">
-            <div className="absolute inset-0 bg-[#0A0A0F]/90 backdrop-blur-md" onClick={() => setShowAddModal(false)} />
+          <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center">
+            <div className="absolute inset-0 bg-[#0A0A0F]/80 backdrop-blur-md" onClick={() => setShowAddModal(false)} />
             <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="relative w-full max-w-lg bg-[#111116] p-[24px] rounded-[24px] border border-[rgba(255,255,255,0.06)] shadow-2xl max-h-[90vh] overflow-y-auto"
+              initial={{ y: '100%', opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: '100%', opacity: 0 }}
+              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+              className="relative w-full md:max-w-lg bg-[#111116] rounded-t-[28px] md:rounded-[24px] border border-[rgba(255,255,255,0.06)] shadow-2xl flex flex-col"
+              style={{ maxHeight: '92vh' }}
             >
-              <h2 className="font-heading font-[800] text-[24px] text-white uppercase mb-[24px]">Dodaj Događaj</h2>
-              
+              {/* Drag handle (mobile) */}
+              <div className="w-[40px] h-[4px] bg-[rgba(255,255,255,0.2)] rounded-full mx-auto mt-[12px] mb-[4px] md:hidden" />
+
+              {/* Header */}
+              <div className="flex items-center justify-between px-[24px] pt-[16px] pb-[16px] border-b border-[rgba(255,255,255,0.06)]">
+                <h2 className="font-heading font-[800] text-[22px] text-white uppercase">Dodaj Događaj</h2>
+                <button 
+                  onClick={() => setShowAddModal(false)}
+                  className="w-[36px] h-[36px] rounded-full bg-[#F5A500]/10 border border-[#F5A500]/30 text-[#F5A500] flex items-center justify-center hover:bg-[#F5A500]/20 transition-colors"
+                >
+                  <X className="w-[18px] h-[18px]" />
+                </button>
+              </div>
+
+              {/* Scrollable body */}
+              <div className="flex-1 overflow-y-auto px-[24px] py-[20px]">
               <div className="flex flex-col gap-[16px]">
                 <div>
                   <label className="font-mono text-[10px] text-[#8B8FA8] uppercase tracking-widest mb-[8px] block">Naslov</label>
@@ -480,10 +496,10 @@ export default function Calendar() {
                   <textarea className="w-full bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.1)] rounded-[12px] p-[12px] text-white min-h-[100px]" value={newEvent.description || ''} onChange={e => setNewEvent({...newEvent, description: e.target.value})} placeholder="Detalji događaja..." />
                 </div>
 
-                <div className="flex gap-[12px] mt-[16px]">
-                  <button onClick={() => setShowAddModal(false)} className="flex-1 py-[12px] rounded-[12px] font-heading font-[700] uppercase text-[#8B8FA8] bg-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.1)] transition-colors">Otkaži</button>
-                  <button onClick={handleSaveEvent} className="flex-1 py-[12px] rounded-[12px] font-heading font-[700] uppercase text-[#0A0A0F] bg-[#F5A500] hover:bg-[#ffb31a] transition-colors">Spremi</button>
+                <div className="flex gap-[12px] mt-[8px] pb-[4px]">
+                  <button onClick={handleSaveEvent} className="flex-1 py-[14px] rounded-[14px] font-heading font-[700] uppercase text-[#0A0A0F] bg-[#F5A500] hover:bg-[#ffb31a] transition-colors text-[15px] shadow-[0_0_20px_rgba(245,165,0,0.3)]">Spremi događaj</button>
                 </div>
+              </div>
               </div>
             </motion.div>
           </div>

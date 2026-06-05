@@ -36,9 +36,10 @@ export default function BottomNav() {
       <div 
         id="bottom-nav-container" 
         className={cn(
-          "fixed bottom-4 left-4 right-4 z-[100] flex justify-center pointer-events-none transition-all duration-300 ease-in-out",
+          "fixed left-4 right-4 z-[100] flex justify-center pointer-events-none transition-all duration-300 ease-in-out",
           isHidden ? "opacity-0 translate-y-24" : "opacity-100 translate-y-0"
         )}
+        style={{ bottom: 'calc(env(safe-area-inset-bottom) + 16px)' }}
       >
         <nav className="bg-[#111116]/90 backdrop-blur-xl border border-white/5 rounded-full px-6 py-2 flex items-center justify-between w-full max-w-md shadow-2xl pointer-events-auto relative">
           

@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Flame, Music, Search, ArrowLeft } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
+import { bottomNavEventTarget } from '../components/layout/BottomNav';
 
 const TRENDS = [
   { id: 1, type: "audio", name: "Ismael Hadžić - Hook Master Beats", creator: "ismael.hadzic", usage: 42100, reach: "1.4M", trend: "high" },
@@ -16,6 +17,14 @@ export default function TrendTracker() {
   const [filter, setFilter] = useState<'all' | 'audio' | 'format' | 'hashtag'>('all');
 
   const filteredTrends = TRENDS.filter(t => filter === 'all' || t.type === filter);
+
+  // Hide bottom nav while on this page
+  useEffect(() => {
+    bottomNavEventTarget.dispatchEvent(new Event('hide'));
+    return () => {
+      bottomNavEventTarget.dispatchEvent(new Event('show'));
+    };
+  }, []);
 
   return (
     <div className="flex flex-col w-full max-w-full overflow-hidden pb-[24px]">

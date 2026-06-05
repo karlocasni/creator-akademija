@@ -183,7 +183,12 @@
   border-radius: 999px !important;
   font-family: 'Space Mono', monospace !important;
   font-weight: 700 !important;
-  padding: 3px 10px !important;
+  padding: 6px 14px !important;
+  font-size: 13px !important;
+  white-space: nowrap !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 .active-avatar {
   border: 2px solid #F5A500 !important;

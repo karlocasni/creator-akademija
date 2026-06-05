@@ -188,7 +188,7 @@ export default function Lectures() {
       <div className="p-4 md:p-10 max-w-5xl mx-auto">
         <button
           onClick={() => setSelectedLecture(null)}
-          className="mb-6 text-sm font-bold text-muted hover:text-primary flex items-center gap-1"
+          className="mb-6 text-sm font-bold text-[#F5A500] hover:text-[#ffb31a] flex items-center gap-1 transition-colors"
         >
           <ChevronRight className="w-4 h-4 rotate-180" /> NATRAG
         </button>

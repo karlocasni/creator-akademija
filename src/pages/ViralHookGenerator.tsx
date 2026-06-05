@@ -3,6 +3,7 @@ import { Sparkles, Copy, RefreshCw, Check, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
+import { bottomNavEventTarget } from '../components/layout/BottomNav';
 
 const ATTENTIONS = [
   "Svi ti lažu o...",
@@ -74,6 +75,14 @@ export default function ViralHookGenerator() {
       }
     }, 100);
   };
+
+  // Hide bottom nav while on this page
+  useEffect(() => {
+    bottomNavEventTarget.dispatchEvent(new Event('hide'));
+    return () => {
+      bottomNavEventTarget.dispatchEvent(new Event('show'));
+    };
+  }, []);
 
   // Add generated hook to recents once spinning stops
   useEffect(() => {

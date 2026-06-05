@@ -7,7 +7,13 @@ export default function TopBar() {
   const { profile } = useAuth();
   
   return (
-    <header className="sticky top-0 z-50 bg-[#0A0A0F]/80 backdrop-blur-md px-4 py-4 flex items-center justify-between border-b border-[rgba(255,255,255,0.06)]">
+    <header 
+      className="sticky top-0 z-50 bg-[#0A0A0F]/80 backdrop-blur-md px-4 flex items-center justify-between border-b border-[rgba(255,255,255,0.06)]"
+      style={{ 
+        paddingTop: 'calc(env(safe-area-inset-top) + 16px)',
+        paddingBottom: '16px'
+      }}
+    >
       <div className="flex items-center gap-2">
         <Link to="/feed" className="font-heading text-lg tracking-tight uppercase flex items-center gap-1">
           <span className="text-white font-bold">CREATOR</span> <span className="text-[#F5A500] font-marker font-normal tracking-normal text-xl mt-0.5">AKADEMIJA</span>

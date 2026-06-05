@@ -7,6 +7,7 @@ import { cn } from '../../lib/utils';
 import { useMemberSearch } from '../../hooks/useMemberSearch';
 import MentionDropdown from '../ui/MentionDropdown';
 import { validateVideo } from '../../lib/compress';
+import { bottomNavEventTarget } from '../layout/BottomNav';
 
 
 function getActiveMention(text: string, cursorPos: number): string | null {
@@ -50,7 +51,15 @@ export default function PostModal({ isOpen, onClose }: PostModalProps) {
 
   useEffect(() => {
     document.body.style.overflow = isOpen ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
+    if (isOpen) {
+      bottomNavEventTarget.dispatchEvent(new Event('hide'));
+    } else {
+      bottomNavEventTarget.dispatchEvent(new Event('show'));
+    }
+    return () => {
+      document.body.style.overflow = '';
+      bottomNavEventTarget.dispatchEvent(new Event('show'));
+    };
   }, [isOpen]);
 
   if (!isOpen || !user) return null;
