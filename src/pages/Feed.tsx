@@ -200,18 +200,42 @@ export default function Feed() {
 
       <CreatePost />
 
-      {challenges.filter(c => c.active).map(c => (
-        <div key={c.id} className="mx-[16px] mb-[12px] p-4 border-l-4 border-l-primary bg-primary/5 flex items-start gap-4 rounded-r-xl border border-[rgba(255,255,255,0.06)] border-l-[rgba(245,165,0,1)]">
-          <div className="bg-primary/20 p-2 rounded-full mt-1">
-            <Trophy className="w-5 h-5 text-primary" />
+      {challenges.filter(c => c.active).map(c => {
+        const daysLeft = c.deadline
+          ? Math.max(0, Math.ceil((new Date(c.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+          : (c.daysRemaining ?? 0);
+        return (
+          <div key={c.id} className="mx-[16px] mb-[18px] relative rounded-[18px] p-[16px] pl-[20px] overflow-hidden cursor-pointer"
+            onClick={() => window.location.href = '/challenge'}
+            style={{
+              background: 'linear-gradient(110deg, rgba(245,165,0,0.12), rgba(245,165,0,0.02) 60%), #111116',
+              border: '1px solid rgba(245,165,0,0.22)',
+            }}
+          >
+            {/* Left accent bar */}
+            <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-[18px]"
+              style={{ background: '#F5A500', boxShadow: '0 0 14px rgba(245,165,0,0.6)' }} />
+            <div className="flex gap-[14px] items-start">
+              <div className="w-[40px] h-[40px] rounded-[12px] flex items-center justify-center shrink-0"
+                style={{ background: 'rgba(245,165,0,0.15)' }}>
+                <Trophy className="w-5 h-5 text-[#F5A500]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="font-mono font-bold text-[9.5px] tracking-[0.2em] uppercase text-[#F5A500] block">Challenge Tjedna</span>
+                <h3 className="font-heading font-bold text-[16.5px] text-white leading-[1.15] mt-[5px] mb-[3px]">{c.title}</h3>
+                <div className="flex items-center justify-between mt-2">
+                  <p className="text-[12px] text-[#8B8FA8]">
+                    {daysLeft > 0 ? `${daysLeft} dana do kraja` : 'Završava danas!'}
+                  </p>
+                  <span className="text-[11px] font-mono font-bold text-[#F5A500] bg-[#F5A500]/10 px-3 py-1 rounded-full">
+                    +{c.xpReward || 50} XP →
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
-          <div>
-            <span className="text-[10px] font-black uppercase text-primary tracking-widest block mb-1">Aktivni Izazov</span>
-            <h3 className="font-bold text-lg mb-1 leading-tight">{c.title}</h3>
-            <p className="text-sm text-muted-foreground">{c.description}</p>
-          </div>
-        </div>
-      ))}
+        );
+      })}
 
       <div className="flex flex-col gap-[12px] px-[16px]">
         {loading ? (

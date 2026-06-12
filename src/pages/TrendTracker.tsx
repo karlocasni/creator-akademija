@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Flame, Music, Search, ArrowLeft } from 'lucide-react';
+import { Flame, Music, Search, ArrowLeft, Bookmark, BookmarkCheck } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { bottomNavEventTarget } from '../components/layout/BottomNav';
+import { db } from '../lib/firebase';
+import { collection, addDoc, deleteDoc, doc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { useAuth } from '../contexts/AuthContext';
+
 
 const TRENDS = [
   { id: 1, type: "audio", name: "Ismael Hadžić - Hook Master Beats", creator: "ismael.hadzic", usage: 42100, reach: "1.4M", trend: "high" },
@@ -14,7 +18,9 @@ const TRENDS = [
 
 export default function TrendTracker() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [filter, setFilter] = useState<'all' | 'audio' | 'format' | 'hashtag'>('all');
+  const [savedTrends, setSavedTrends] = useState<any[]>([]);
 
   const filteredTrends = TRENDS.filter(t => filter === 'all' || t.type === filter);
 
@@ -25,6 +31,42 @@ export default function TrendTracker() {
       bottomNavEventTarget.dispatchEvent(new Event('show'));
     };
   }, []);
+
+  // Load saved trends for current user
+  useEffect(() => {
+    if (!user) return;
+    const unsub = onSnapshot(collection(db, 'savedTrends'), snap => {
+      const userSaved = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter((item: any) => item.userId === user.uid);
+      setSavedTrends(userSaved);
+    });
+    return unsub;
+  }, [user]);
+
+  const isSaved = (trendId: number) => savedTrends.some((s: any) => s.trendId === trendId);
+
+  const handleSaveTrend = async (trend: typeof TRENDS[number]) => {
+    if (!user) return;
+    const existing = savedTrends.find((s: any) => s.trendId === trend.id);
+    if (existing) {
+      await deleteDoc(doc(db, 'savedTrends', existing.id));
+    } else {
+      await addDoc(collection(db, 'savedTrends'), {
+        userId: user.uid,
+        trendId: trend.id,
+        name: trend.name,
+        type: trend.type,
+        creator: trend.creator,
+        usage: trend.usage,
+        reach: trend.reach,
+        trend: trend.trend,
+        createdAt: serverTimestamp(),
+      });
+    }
+  };
+
+
 
   return (
     <div className="flex flex-col w-full max-w-full overflow-hidden pb-[24px]">
@@ -123,15 +165,28 @@ export default function TrendTracker() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-[8px] pt-[12px] border-t border-[rgba(255,255,255,0.04)]">
-                  <div className="flex flex-col">
-                    <span className="font-mono text-[10px] text-[#4A4A5A] uppercase tracking-widest">Korištenja</span>
-                    <span className="font-sans font-[700] text-[14px] text-[#FFFFFF]">{trend.usage.toLocaleString()}</span>
+                <div className="flex items-center justify-between gap-[8px] pt-[12px] border-t border-[rgba(255,255,255,0.04)]">
+                  <div className="flex gap-4">
+                    <div className="flex flex-col">
+                      <span className="font-mono text-[10px] text-[#4A4A5A] uppercase tracking-widest">Korištenja</span>
+                      <span className="font-sans font-[700] text-[14px] text-[#FFFFFF]">{trend.usage.toLocaleString()}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-mono text-[10px] text-[#4A4A5A] uppercase tracking-widest">Avg. Reach</span>
+                      <span className="font-sans font-[700] text-[14px] text-[#FFFFFF]">{trend.reach}</span>
+                    </div>
                   </div>
-                  <div className="flex flex-col">
-                    <span className="font-mono text-[10px] text-[#4A4A5A] uppercase tracking-widest">Avg. Reach</span>
-                    <span className="font-sans font-[700] text-[14px] text-[#FFFFFF]">{trend.reach}</span>
-                  </div>
+                  <button
+                    onClick={() => handleSaveTrend(trend)}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                      isSaved(trend.id)
+                        ? 'bg-[#F5A500]/20 text-[#F5A500]'
+                        : 'bg-[rgba(255,255,255,0.05)] text-[#8B8FA8] hover:bg-[#F5A500]/10 hover:text-[#F5A500]'
+                    }`}
+                    title={isSaved(trend.id) ? 'Ukloni iz spremljenoga' : 'Spremi trend'}
+                  >
+                    {isSaved(trend.id) ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
             ))}

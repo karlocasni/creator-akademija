@@ -51,7 +51,11 @@ const SEED_PROFILES = {
     level: 2,
     avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=KreatorStudent',
     createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-    isAdmin: false
+    isAdmin: false,
+    weeklyGoal: 3,
+    weeklyPostCount: 1,
+    streak: 2,
+    streakWeekStart: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
   },
   'ismael-admin-id': {
     uid: 'ismael-admin-id',
@@ -62,7 +66,11 @@ const SEED_PROFILES = {
     level: 99,
     avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ismael',
     createdAt: new Date(Date.now() - 100 * 24 * 60 * 60 * 1000).toISOString(),
-    isAdmin: true
+    isAdmin: true,
+    weeklyGoal: 7,
+    weeklyPostCount: 7,
+    streak: 12,
+    streakWeekStart: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
   },
   'student-1': {
     uid: 'student-1',
@@ -73,7 +81,11 @@ const SEED_PROFILES = {
     level: 8,
     avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Anamarija',
     createdAt: new Date().toISOString(),
-    isAdmin: false
+    isAdmin: false,
+    weeklyGoal: 5,
+    weeklyPostCount: 4,
+    streak: 4,
+    streakWeekStart: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
   },
   'student-2': {
     uid: 'student-2',
@@ -84,7 +96,11 @@ const SEED_PROFILES = {
     level: 6,
     avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Filip',
     createdAt: new Date().toISOString(),
-    isAdmin: false
+    isAdmin: false,
+    weeklyGoal: 2,
+    weeklyPostCount: 2,
+    streak: 1,
+    streakWeekStart: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
   },
   'student-3': {
     uid: 'student-3',
@@ -95,7 +111,11 @@ const SEED_PROFILES = {
     level: 4,
     avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Lana',
     createdAt: new Date().toISOString(),
-    isAdmin: false
+    isAdmin: false,
+    weeklyGoal: 3,
+    weeklyPostCount: 0,
+    streak: 0,
+    streakWeekStart: new Date().toISOString(),
   }
 };
 
@@ -269,24 +289,97 @@ const SEED_MESSAGES = {
   ]
 };
 
+const getSunday = () => {
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const daysToSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+  const sunday = new Date(now);
+  sunday.setDate(now.getDate() + daysToSunday);
+  sunday.setHours(23, 59, 59, 0);
+  return sunday.toISOString();
+};
+
 const SEED_CHALLENGES = [
   {
     id: 'challenge-1',
     title: 'Snimi 3 različita hooka za isti proizvod',
     description: 'Cilj je vježbati uvodne 3 sekunde. Snimi tri potpuno različita pristupa (Vizualni šok, Statistički hook, Emocionalni hook) i postavi ih u Creator Hub.',
-    xpReward: 300,
+    xpReward: 50,
     daysRemaining: 5,
+    deadline: getSunday(),
+    active: true,
+    exampleText: 'Pogledaj lekciju 1 o hookovima za inspiraciju. Svaki hook mora biti drugačiji pristup!',
     participants: ['student-1', 'student-2', 'mock-user-id']
   },
   {
     id: 'challenge-2',
     title: 'Objavi video svaki dan tijekom 7 dana',
     description: 'Izazov dosljednosti! Objavljuj jedan video dnevno. Svoje video linkove i statistiku podijeli s kolegama za dodatni feedback.',
-    xpReward: 1000,
+    xpReward: 100,
     daysRemaining: 12,
+    deadline: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    active: false,
     participants: ['student-1']
   }
 ];
+
+const SEED_HOOK_VAULT = [
+  {
+    id: 'hook-1',
+    hookText: 'Ovo nitko od lifestyle kreatora ne govori otvoreno...',
+    kategorija: 'Radoznalost',
+    nisa: 'Lifestyle',
+    zastoRadi: 'Radoznalost je jedan od najjačih psiholoških okidača. Gledatelji moraju znati što skrivate.',
+    authorId: 'ismael-admin-id',
+    authorName: 'Ismael Hadžić',
+    likes: ['student-1', 'student-2'],
+    likeCount: 2,
+    createdAt: new MockTimestamp(Math.floor(Date.now() / 1000) - 3600 * 24, 0)
+  },
+  {
+    id: 'hook-2',
+    hookText: 'POV: Ulaziš u fitness zajednicu prvi put i ne znaš ništa...',
+    kategorija: 'Humor',
+    nisa: 'Fitness',
+    zastoRadi: 'POV format stvara immediacy i identifikaciju. Gledatelji se stavljaju u situaciju i ostaju da vide kako se razvija.',
+    authorId: 'student-1',
+    authorName: 'Anamarija V.',
+    likes: ['mock-user-id'],
+    likeCount: 1,
+    createdAt: new MockTimestamp(Math.floor(Date.now() / 1000) - 3600 * 12, 0)
+  },
+  {
+    id: 'hook-3',
+    hookText: 'Jedna greška koja koštala moj kanal 50.000 pratitelja:',
+    kategorija: 'Priča',
+    nisa: 'Biznis',
+    zastoRadi: 'Priče o greškama i gubitku aktiviraju empatiju i FOMO. Audience želi znati grešku da je izbjegne.',
+    authorId: 'student-2',
+    authorName: 'Filip B.',
+    likes: ['ismael-admin-id', 'student-1', 'mock-user-id'],
+    likeCount: 3,
+    createdAt: new MockTimestamp(Math.floor(Date.now() / 1000) - 3600 * 6, 0)
+  }
+];
+
+const SEED_CHALLENGE_SUBMISSIONS: any[] = [
+  {
+    id: 'sub-1',
+    challengeId: 'challenge-1',
+    authorId: 'student-1',
+    authorName: 'Anamarija V.',
+    authorAvatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Anamarija',
+    videoLink: 'https://tiktok.com/@anamarija/video/example',
+    description: 'Moj hook za jutarnju rutinu — tri potpuno različita pristupa!',
+    likes: ['ismael-admin-id'],
+    likeCount: 1,
+    isPinned: false,
+    createdAt: new MockTimestamp(Math.floor(Date.now() / 1000) - 3600 * 5, 0)
+  }
+];
+
+const SEED_VIDEO_IDEAS: any[] = [];
+const SEED_SAVED_TRENDS: any[] = [];
 
 const SEED_NOTIFICATIONS: any[] = [];
 
@@ -333,6 +426,10 @@ let mockDb = {
   challenges: getLocalData('creator_mock_challenges', SEED_CHALLENGES),
   notifications: getLocalData('creator_mock_notifications', SEED_NOTIFICATIONS),
   events: getLocalData('creator_mock_events', SEED_EVENTS),
+  hookVault: getLocalData('creator_mock_hook_vault', SEED_HOOK_VAULT),
+  videoIdeas: getLocalData('creator_mock_video_ideas', SEED_VIDEO_IDEAS),
+  challengeSubmissions: getLocalData('creator_mock_challenge_submissions', SEED_CHALLENGE_SUBMISSIONS),
+  savedTrends: getLocalData('creator_mock_saved_trends', SEED_SAVED_TRENDS),
 };
 
 const saveDb = () => {
@@ -344,6 +441,10 @@ const saveDb = () => {
   setLocalData('creator_mock_challenges', mockDb.challenges);
   setLocalData('creator_mock_notifications', mockDb.notifications);
   setLocalData('creator_mock_events', mockDb.events);
+  setLocalData('creator_mock_hook_vault', mockDb.hookVault);
+  setLocalData('creator_mock_video_ideas', mockDb.videoIdeas);
+  setLocalData('creator_mock_challenge_submissions', mockDb.challengeSubmissions);
+  setLocalData('creator_mock_saved_trends', mockDb.savedTrends);
   triggerAllListeners();
 };
 

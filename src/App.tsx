@@ -12,6 +12,9 @@ const Lectures = lazy(() => import('./pages/Lectures'));
 const Tools = lazy(() => import('./pages/Tools'));
 const ViralHookGenerator = lazy(() => import('./pages/ViralHookGenerator'));
 const TrendTracker = lazy(() => import('./pages/TrendTracker'));
+const VideoIdeaGenerator = lazy(() => import('./pages/VideoIdeaGenerator'));
+const HookVault = lazy(() => import('./pages/HookVault'));
+const Challenge = lazy(() => import('./pages/Challenges'));
 const Calendar = lazy(() => import('./pages/Calendar'));
 const Profile = lazy(() => import('./pages/Profile'));
 const Messages = lazy(() => import('./pages/Messages'));
@@ -55,6 +58,9 @@ function AppRoutes() {
             <Route path="/tools" element={<Tools />} />
             <Route path="/tools/hook-generator" element={<ViralHookGenerator />} />
             <Route path="/tools/trend-tracker" element={<TrendTracker />} />
+            <Route path="/tools/video-ideas" element={<VideoIdeaGenerator />} />
+            <Route path="/tools/hook-vault" element={<HookVault />} />
+            <Route path="/challenge" element={<Challenge />} />
             <Route path="/calendar" element={<Calendar />} />
             
             <Route path="/profile" element={<Profile />} />

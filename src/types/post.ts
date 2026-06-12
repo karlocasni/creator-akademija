@@ -48,6 +48,11 @@ export interface UserProfile {
   instagram?: string;
   tiktok?: string;
   youtube?: string;
+  // Streak & goals
+  weeklyGoal?: number;
+  weeklyPostCount?: number;
+  streak?: number;
+  streakWeekStart?: string;
 }
 
 export interface FirestorePost {
