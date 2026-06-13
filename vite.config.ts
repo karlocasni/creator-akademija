@@ -9,16 +9,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 export default defineConfig({
-  resolve: {
-    alias: {
-      'firebase/app': resolve(__dirname, './src/lib/firebase-mock.ts'),
-      'firebase/auth': resolve(__dirname, './src/lib/firebase-mock.ts'),
-      'firebase/firestore': resolve(__dirname, './src/lib/firebase-mock.ts'),
-      'firebase/storage': resolve(__dirname, './src/lib/firebase-mock.ts'),
-      'firebase/functions': resolve(__dirname, './src/lib/firebase-mock.ts'),
-      'firebase/analytics': resolve(__dirname, './src/lib/firebase-mock.ts'),
-    }
-  },
   plugins: [
     react(),
     tailwindcss(),

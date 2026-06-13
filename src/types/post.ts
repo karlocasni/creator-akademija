@@ -53,6 +53,8 @@ export interface UserProfile {
   weeklyPostCount?: number;
   streak?: number;
   streakWeekStart?: string;
+  isCreator?: boolean;
+  mainTopic?: string;
 }
 
 export interface FirestorePost {

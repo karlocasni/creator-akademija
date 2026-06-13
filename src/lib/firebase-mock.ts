@@ -67,10 +67,33 @@ const SEED_PROFILES = {
     avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ismael',
     createdAt: new Date(Date.now() - 100 * 24 * 60 * 60 * 1000).toISOString(),
     isAdmin: true,
+    isCreator: true,
+    mainTopic: 'Video Produkcija & Algoritmi',
+    bio: 'Glavni mentor akademije. Pomažem vam da od nule stvorite prepoznatljiv brend i gospodarite algoritmima.',
     weeklyGoal: 7,
     weeklyPostCount: 7,
     streak: 12,
     streakWeekStart: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    instagram: 'ismael_hadzic',
+    tiktok: 'ismael_hadzic',
+    youtube: 'ismael_hadzic'
+  },
+  'filip-creator-id': {
+    uid: 'filip-creator-id',
+    username: 'Filip B. (TikTok Expert)',
+    email: 'filip.expert@akademija.com',
+    status: 'active',
+    xp: 4500,
+    level: 9,
+    avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Filip',
+    createdAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(),
+    isAdmin: true,
+    isCreator: true,
+    mainTopic: 'TikTok Marketing & Rast',
+    bio: 'Gostujući predavač i stručnjak za kratke video formate i optimizaciju tjednih strategija objava.',
+    instagram: 'filip_tiktok',
+    tiktok: 'filip_expert',
+    youtube: 'filip_marketing'
   },
   'student-1': {
     uid: 'student-1',
@@ -82,10 +105,15 @@ const SEED_PROFILES = {
     avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Anamarija',
     createdAt: new Date().toISOString(),
     isAdmin: false,
+    isCreator: true,
+    mainTopic: 'Dizajn & Osobni Brending',
+    bio: 'Freelance dizajnerica i mentorica za vizualni identitet i izgradnju lojalne publike.',
     weeklyGoal: 5,
     weeklyPostCount: 4,
     streak: 4,
     streakWeekStart: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    instagram: 'anamarija_v',
+    tiktok: 'anamarija_v'
   },
   'student-2': {
     uid: 'student-2',
@@ -128,7 +156,8 @@ const SEED_COURSES = [
     thumbnail: 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=500',
     duration: '2:00',
     category: 'Uvod',
-    youtubeId: 'dQw4w9WgXcQ'
+    youtubeId: 'dQw4w9WgXcQ',
+    creatorId: 'ismael-admin-id'
   },
   {
     id: 'course-2',
@@ -138,7 +167,8 @@ const SEED_COURSES = [
     thumbnail: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=500',
     duration: '5:00',
     category: 'Teorija',
-    youtubeId: 'dQw4w9WgXcQ'
+    youtubeId: 'dQw4w9WgXcQ',
+    creatorId: 'ismael-admin-id'
   },
   {
     id: 'course-3',
@@ -148,7 +178,8 @@ const SEED_COURSES = [
     thumbnail: 'https://images.unsplash.com/photo-1493612276216-ee3925520721?w=500',
     duration: '4:00',
     category: 'Strategija',
-    youtubeId: 'dQw4w9WgXcQ'
+    youtubeId: 'dQw4w9WgXcQ',
+    creatorId: 'student-1'
   },
   {
     id: 'course-4',
@@ -158,7 +189,8 @@ const SEED_COURSES = [
     thumbnail: 'https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?w=500',
     duration: '12:00',
     category: 'Produkcija',
-    youtubeId: 'dQw4w9WgXcQ'
+    youtubeId: 'dQw4w9WgXcQ',
+    creatorId: 'filip-creator-id'
   },
   {
     id: 'course-5',
@@ -168,7 +200,8 @@ const SEED_COURSES = [
     thumbnail: 'https://images.unsplash.com/photo-1616469829581-73993eb86b02?w=500',
     duration: '8:00',
     category: 'Algoritam',
-    youtubeId: 'dQw4w9WgXcQ'
+    youtubeId: 'dQw4w9WgXcQ',
+    creatorId: 'ismael-admin-id'
   },
   {
     id: 'course-6',
@@ -178,7 +211,8 @@ const SEED_COURSES = [
     thumbnail: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=500',
     duration: '6:00',
     category: 'Strategija',
-    youtubeId: 'dQw4w9WgXcQ'
+    youtubeId: 'dQw4w9WgXcQ',
+    creatorId: 'filip-creator-id'
   },
   {
     id: 'course-7',
@@ -188,7 +222,8 @@ const SEED_COURSES = [
     thumbnail: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=500',
     duration: '9:00',
     category: 'Zajednica',
-    youtubeId: 'dQw4w9WgXcQ'
+    youtubeId: 'dQw4w9WgXcQ',
+    creatorId: 'student-1'
   },
   {
     id: 'course-8',
@@ -198,7 +233,8 @@ const SEED_COURSES = [
     thumbnail: 'https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=500',
     duration: '10:00',
     category: 'Algoritam',
-    youtubeId: 'dQw4w9WgXcQ'
+    youtubeId: 'dQw4w9WgXcQ',
+    creatorId: 'ismael-admin-id'
   },
   {
     id: 'course-9',
@@ -208,7 +244,8 @@ const SEED_COURSES = [
     thumbnail: 'https://images.unsplash.com/photo-1552581230-c01bc941c91a?w=500',
     duration: '15:00',
     category: 'Monetizacija',
-    youtubeId: 'dQw4w9WgXcQ'
+    youtubeId: 'dQw4w9WgXcQ',
+    creatorId: 'filip-creator-id'
   }
 ];
 
@@ -392,7 +429,8 @@ const SEED_EVENTS = [
     date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days from now
     duration: '60 min',
     zoomLink: 'https://zoom.us/j/placeholder-ismael-qa',
-    speaker: 'Ismael Hadžić'
+    speaker: 'Ismael Hadžić',
+    creatorId: 'ismael-admin-id'
   },
   {
     id: 'event-2',
@@ -402,7 +440,8 @@ const SEED_EVENTS = [
     date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
     duration: '90 min',
     zoomLink: 'https://zoom.us/j/placeholder-guest-lecture',
-    speaker: 'Filip (TikTok Expert)'
+    speaker: 'Filip B. (TikTok Expert)',
+    creatorId: 'filip-creator-id'
   },
   {
     id: 'event-3',
@@ -412,7 +451,8 @@ const SEED_EVENTS = [
     date: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
     duration: '45 min',
     zoomLink: 'https://meet.google.com/placeholder-accountability',
-    speaker: 'Creator Moderatori'
+    speaker: 'Ismael Hadžić',
+    creatorId: 'ismael-admin-id'
   }
 ];
 
@@ -430,7 +470,18 @@ let mockDb = {
   videoIdeas: getLocalData('creator_mock_video_ideas', SEED_VIDEO_IDEAS),
   challengeSubmissions: getLocalData('creator_mock_challenge_submissions', SEED_CHALLENGE_SUBMISSIONS),
   savedTrends: getLocalData('creator_mock_saved_trends', SEED_SAVED_TRENDS),
+  submissions: getLocalData('creator_mock_submissions', []),
 };
+
+// Migrate mock db if needed to load the new creators data
+if (mockDb.profiles['ismael-admin-id'] && !mockDb.profiles['ismael-admin-id'].isCreator) {
+  mockDb.profiles = SEED_PROFILES;
+  mockDb.courses = SEED_COURSES;
+  mockDb.events = SEED_EVENTS;
+  localStorage.setItem('creator_mock_profiles', JSON.stringify(SEED_PROFILES));
+  localStorage.setItem('creator_mock_courses', JSON.stringify(SEED_COURSES));
+  localStorage.setItem('creator_mock_events', JSON.stringify(SEED_EVENTS));
+}
 
 const saveDb = () => {
   setLocalData('creator_mock_profiles', mockDb.profiles);
@@ -445,6 +496,7 @@ const saveDb = () => {
   setLocalData('creator_mock_video_ideas', mockDb.videoIdeas);
   setLocalData('creator_mock_challenge_submissions', mockDb.challengeSubmissions);
   setLocalData('creator_mock_saved_trends', mockDb.savedTrends);
+  setLocalData('creator_mock_submissions', mockDb.submissions);
   triggerAllListeners();
 };
 
@@ -870,3 +922,7 @@ export const db = getFirestore();
 export const storage = getStorage();
 export const functions = getFunctions();
 export const analytics = getAnalytics();
+
+// --- EXPORT SEED DATA FOR SEEDER ---
+export { SEED_PROFILES, SEED_COURSES, SEED_EVENTS, SEED_CHALLENGES, SEED_POSTS };
+

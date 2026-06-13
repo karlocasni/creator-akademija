@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   MessageSquare,
   Share2,
@@ -378,11 +379,47 @@ export default function PostCard({ post }: PostCardProps) {
         </button>
       </div>
 
-      {showComments && (
-        <div className="px-[16px] pb-[16px]">
-          <CommentSection postId={post.id} postAuthorId={post.authorId} />
-        </div>
-      )}
+      <AnimatePresence>
+        {showComments && (
+          <>
+            {/* Backdrop Overlay */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowComments(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200]"
+            />
+            {/* Drawer Sheet */}
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+              className="fixed inset-x-0 bottom-0 bg-[#111116] border-t border-white/10 rounded-t-[30px] z-[201] p-6 pt-4 pb-[calc(16px+env(safe-area-inset-bottom))] shadow-2xl flex flex-col max-h-[80vh] md:max-h-[600px] md:max-w-md md:mx-auto md:rounded-2xl md:bottom-12 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:border"
+            >
+              {/* Drag Indicator Bar */}
+              <div className="w-12 h-1 bg-white/10 rounded-full mx-auto mb-4 cursor-pointer hover:bg-white/20 transition-colors" onClick={() => setShowComments(false)} />
+              
+              {/* Header */}
+              <div className="flex items-center justify-between mb-4 pb-2 border-b border-white/5 text-left">
+                <span className="font-heading font-black text-xs uppercase tracking-widest text-[#8B8FA8]">Komentari ({post.commentsCount ?? 0})</span>
+                <button
+                  onClick={() => setShowComments(false)}
+                  className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 text-white flex items-center justify-center text-xs font-bold transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Scrollable Comment Section */}
+              <div className="flex-1 overflow-hidden">
+                <CommentSection postId={post.id} postAuthorId={post.authorId} />
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </article>
   );
 }

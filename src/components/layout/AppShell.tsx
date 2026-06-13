@@ -2,7 +2,6 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import TopBar from './TopBar';
 import BottomNav from './BottomNav';
-import Leaderboard from '../feed/Leaderboard';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -29,12 +28,8 @@ export default function AppShell({ children }: AppShellProps) {
       <div className={cn(
         'flex-1 pb-32'
       )}>
-        <div className="max-w-[1100px] mx-auto grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-start">
+        <div className="max-w-[1000px] mx-auto px-4">
           <main className="min-w-0">{children}</main>
-
-          <aside className="hidden lg:block p-6">
-            <Leaderboard />
-          </aside>
         </div>
       </div>
 

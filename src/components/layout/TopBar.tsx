@@ -12,28 +12,29 @@ export default function TopBar() {
 
   return (
     <div
-      className="sticky top-0 z-50 relative overflow-hidden flex items-center justify-between px-[18px] border-b border-[rgba(255,255,255,0.06)]"
+      className="sticky top-0 z-50 relative flex items-center justify-between px-[18px] border-b border-[rgba(255,255,255,0.06)]"
       style={{
         background: '#0A0A0F',
         paddingTop: 'calc(env(safe-area-inset-top) + 10px)',
         paddingBottom: '14px',
       }}
     >
-      {/* ── Ambient backdrop glow ── */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 -top-20 flex justify-center"
-        style={{ zIndex: 0 }}
-      >
+      {/* ── Ambient backdrop glow wrapper ── */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
         <div
-          style={{
-            width: 340,
-            height: 220,
-            borderRadius: '50%',
-            background:
-              'radial-gradient(50% 50% at 50% 50%, rgba(245,165,0,.15) 0%, transparent 70%)',
-          }}
-        />
+          aria-hidden
+          className="absolute inset-x-0 -top-20 flex justify-center"
+        >
+          <div
+            style={{
+              width: 340,
+              height: 220,
+              borderRadius: '50%',
+              background:
+                'radial-gradient(50% 50% at 50% 50%, rgba(245,165,0,.15) 0%, transparent 70%)',
+            }}
+          />
+        </div>
       </div>
 
       {/* ── Left: wordmark ── */}

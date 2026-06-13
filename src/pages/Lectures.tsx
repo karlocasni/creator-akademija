@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Play, Lock, Clock, CheckCircle2, ChevronRight, Bell, Plus, X, Upload } from 'lucide-react';
-import { collection, getDocs, addDoc, onSnapshot, query, updateDoc, doc, deleteDoc, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, addDoc, onSnapshot, query, updateDoc, doc, deleteDoc, orderBy, serverTimestamp, setDoc, getDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
@@ -32,13 +32,46 @@ export default function Lectures() {
   const [editCourseId, setEditCourseId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Submissions states
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  
+  // Student submission form states
+  const [videoLink, setVideoLink] = useState('');
+  const [submissionNotes, setSubmissionNotes] = useState('');
+  const [isEditingSubmission, setIsEditingSubmission] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  
+  // Creator grading states
+  const [selectedSubmissionForGrading, setSelectedSubmissionForGrading] = useState<any | null>(null);
+  const [gradeValue, setGradeValue] = useState<number>(5);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [grading, setGrading] = useState(false);
+
   useEffect(() => {
     const q = query(collection(db, 'courses'), orderBy('daysToUnlock', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const dbLectures = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lecture));
       setLectures(dbLectures);
+    }, (err) => {
+      console.warn('[Lectures] Courses fetch error, using mock fallback:', err);
+      import('../lib/firebase-mock').then(({ SEED_COURSES }) => {
+        setLectures(SEED_COURSES as any[]);
+      });
     });
     return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const unsubscribeSubmissions = onSnapshot(collection(db, 'submissions'), (snapshot) => {
+      const allSubmissions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      allSubmissions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setSubmissions(allSubmissions);
+    }, (err) => {
+      console.warn('[Lectures] Submissions fetch error, using empty fallback:', err);
+      setSubmissions([]);
+    });
+    return unsubscribeSubmissions;
   }, []);
 
   const notifyAll = async () => {
@@ -146,6 +179,54 @@ export default function Lectures() {
     }
   };
 
+  const handleGradeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profile || !selectedSubmissionForGrading) return;
+
+    setGrading(true);
+
+    try {
+      const subRef = doc(db, 'submissions', selectedSubmissionForGrading.id);
+      await setDoc(subRef, {
+        status: 'graded',
+        grade: gradeValue,
+        feedback: feedbackText.trim(),
+        gradedBy: profile.username,
+        gradedAt: new Date().toISOString()
+      }, { merge: true });
+
+      // Award XP to the student (+100 XP for video completion!)
+      const studentRef = doc(db, 'profiles', selectedSubmissionForGrading.userId);
+      const studentSnap = await getDoc(studentRef);
+      if (studentSnap.exists()) {
+        const studentData = studentSnap.data();
+        await setDoc(studentRef, {
+          xp: (studentData.xp || 0) + 100
+        }, { merge: true });
+      }
+
+      // Send notification to student
+      await createNotification({
+        recipientId: selectedSubmissionForGrading.userId,
+        senderId: user?.uid || 'system',
+        senderName: profile.username,
+        senderAvatar: profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`,
+        type: 'comment',
+        message: `Mentor ${profile.username} je ocijenio tvoj video za predavanje: ${selectedSubmissionForGrading.lectureTitle} (Ocjena: ${gradeValue}/5)`,
+        postId: null
+      });
+
+      setSelectedSubmissionForGrading(null);
+      setFeedbackText('');
+      setGradeValue(5);
+    } catch (err) {
+      console.error('Grading failed:', err);
+      alert('Došlo je do pogreške pri ocjenjivanju.');
+    } finally {
+      setGrading(false);
+    }
+  };
+
   const getSignupDate = (): Date => {
     if (!profile?.createdAt) return new Date();
     const parsed = new Date(profile.createdAt);
@@ -234,6 +315,409 @@ export default function Lectures() {
           {selectedLecture.title}
         </h1>
         <p className="text-muted-foreground text-lg mb-8 whitespace-pre-wrap">{selectedLecture.description}</p>
+
+        {/* SUBMISSION & GRADING SECTION */}
+        <div className="border-t border-white/10 pt-10 mt-10 text-left">
+          {/* Section title */}
+          <div className="flex items-center gap-3 mb-6">
+            <span className="material-symbols-outlined text-primary text-3xl">upload_file</span>
+            <div>
+              <h2 className="text-2xl font-black uppercase tracking-tight text-white">Zadatak i Predaja Videa</h2>
+              <p className="text-[#8B8FA8] text-xs uppercase tracking-wider mt-0.5">
+                Pošalji svoj video na ocjenjivanje i preuzmi povratne informacije mentora.
+              </p>
+            </div>
+          </div>
+
+          {/* Conditional rendering based on user role */}
+          {!(profile?.isCreator || profile?.isAdmin) ? (
+            /* Student View */
+            (() => {
+              const mySub = submissions.find(
+                (s) => s.userId === user?.uid && s.lectureId === selectedLecture.id
+              );
+              
+              if (mySub && !isEditingSubmission) {
+                return (
+                  <div className="bg-[#111116] border border-white/5 p-6 rounded-3xl space-y-4 hover:border-white/10 transition-colors">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <span className={`text-[10px] font-mono font-bold uppercase tracking-widest px-3 py-1 rounded-full ${
+                          mySub.status === 'pending' ? 'bg-[#F5A500]/20 text-[#F5A500]' : 'bg-emerald-500/20 text-emerald-400'
+                        }`}>
+                          {mySub.status === 'pending' ? 'Na čekanju' : 'Ocijenjeno'}
+                        </span>
+                        <span className="text-[11px] text-[#8B8FA8] font-mono">
+                          Predano: {new Date(mySub.createdAt).toLocaleDateString('hr-HR')}
+                        </span>
+                      </div>
+                      
+                      {mySub.status === 'pending' && (
+                        <button
+                          onClick={() => {
+                            setVideoLink(mySub.videoLink);
+                            setSubmissionNotes(mySub.description || '');
+                            setIsEditingSubmission(true);
+                          }}
+                          className="text-xs font-bold text-[#F5A500] hover:underline flex items-center gap-1"
+                        >
+                          <span className="material-symbols-outlined text-sm">edit</span> Uredi predaju
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-bold text-[#8B8FA8] uppercase tracking-wider">Tvoj predani video:</h4>
+                      <a
+                        href={mySub.videoLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 text-primary font-bold hover:underline group break-all text-sm"
+                      >
+                        <span className="material-symbols-outlined">video_library</span>
+                        {mySub.videoLink}
+                        <span className="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                      </a>
+                    </div>
+
+                    {mySub.description && (
+                      <div className="space-y-1">
+                        <h4 className="text-xs font-bold text-[#8B8FA8] uppercase tracking-wider">Tvoje bilješke:</h4>
+                        <p className="text-sm text-[#CCCCCC] italic">"{mySub.description}"</p>
+                      </div>
+                    )}
+
+                    {mySub.status === 'graded' && (
+                      <div className="mt-6 border-t border-white/5 pt-6 grid grid-cols-1 md:grid-cols-4 gap-6">
+                        <div className="md:col-span-1 flex flex-col items-center justify-center bg-[#F5A500]/10 border border-[#F5A500]/30 rounded-2xl p-4">
+                          <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest leading-none">Ocjena</span>
+                          <span className="text-5xl font-black text-[#F5A500] mt-2">{mySub.grade}</span>
+                          <span className="text-xs text-[#8B8FA8] mt-1">od 5</span>
+                        </div>
+                        <div className="md:col-span-3 space-y-3">
+                          <div className="flex items-center gap-2 text-emerald-400">
+                            <span className="material-symbols-outlined">verified_user</span>
+                            <span className="text-xs font-bold uppercase tracking-wider">Komentar mentora ({mySub.gradedBy}):</span>
+                          </div>
+                          <p className="text-sm text-[#CCCCCC] whitespace-pre-wrap leading-relaxed">{mySub.feedback}</p>
+                          <p className="text-[10px] text-muted-foreground">Ocijenjeno: {new Date(mySub.gradedAt).toLocaleDateString('hr-HR')}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              // Submission Form
+              return (
+                <div className="bg-[#111116] border border-white/5 p-6 md:p-8 rounded-3xl space-y-6">
+                  <h3 className="text-lg font-bold text-white uppercase flex items-center gap-2">
+                    <span className="material-symbols-outlined text-primary">cloud_upload</span> 
+                    {isEditingSubmission ? 'Uredi svoj video uradak' : 'Predaj novi video uradak'}
+                  </h3>
+
+                  {submitSuccess && (
+                    <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl flex items-center gap-2 font-bold text-sm uppercase tracking-wide">
+                      <span className="material-symbols-outlined">check_circle</span>
+                      Video je uspješno spremljen! Tvoj tjedni cilj je povećan.
+                    </div>
+                  )}
+
+                  <form 
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      if (!user || !profile) return;
+                      if (!videoLink.trim()) return;
+
+                      setSubmitting(true);
+                      setSubmitSuccess(false);
+
+                      try {
+                        if (isEditingSubmission && mySub) {
+                          // Update existing submission
+                          const subRef = doc(db, 'submissions', mySub.id);
+                          await setDoc(subRef, {
+                            videoLink: videoLink.trim(),
+                            description: submissionNotes.trim(),
+                            createdAt: new Date().toISOString()
+                          }, { merge: true });
+
+                          setIsEditingSubmission(false);
+                        } else {
+                          // Create new submission
+                          const submissionData = {
+                            userId: user.uid,
+                            username: profile.username,
+                            userAvatar: profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`,
+                            lectureId: selectedLecture.id,
+                            lectureTitle: selectedLecture.title,
+                            videoLink: videoLink.trim(),
+                            description: submissionNotes.trim(),
+                            status: 'pending' as const,
+                            createdAt: new Date().toISOString()
+                          };
+
+                          await addDoc(collection(db, 'submissions'), submissionData);
+
+                          // Increment student weeklyPostCount
+                          const newPostCount = (profile.weeklyPostCount || 0) + 1;
+                          updateLocalProfile({ weeklyPostCount: newPostCount });
+                        }
+
+                        setSubmitSuccess(true);
+                        setVideoLink('');
+                        setSubmissionNotes('');
+                        setTimeout(() => setSubmitSuccess(false), 4000);
+                      } catch (err) {
+                        console.error('Submission failed:', err);
+                        alert('Došlo je do pogreške pri predaji videa.');
+                      } finally {
+                        setSubmitting(false);
+                      }
+                    }} 
+                    className="space-y-4"
+                  >
+                    <div className="space-y-2 text-left">
+                      <label className="text-xs font-black text-muted-foreground uppercase ml-1">Video Link (YouTube, Vimeo, TikTok, etc.)</label>
+                      <input
+                        type="url"
+                        required
+                        value={videoLink}
+                        onChange={e => setVideoLink(e.target.value)}
+                        placeholder="https://youtu.be/..."
+                        className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-4 focus:border-primary focus:outline-none transition-colors text-white"
+                      />
+                    </div>
+
+                    <div className="space-y-2 text-left">
+                      <label className="text-xs font-black text-muted-foreground uppercase ml-1">Bilješke za Mentora (Opcionalno)</label>
+                      <textarea
+                        value={submissionNotes}
+                        onChange={e => setSubmissionNotes(e.target.value)}
+                        rows={4}
+                        placeholder="Napiši ako želiš mentoru skrenuti pažnju na specifičan dio videa, hook, problem pri editiranju i slično..."
+                        className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-4 focus:border-primary focus:outline-none transition-colors text-white resize-none placeholder:text-muted-foreground/50"
+                      />
+                    </div>
+
+                    <div className="flex gap-3 pt-2">
+                      {isEditingSubmission && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsEditingSubmission(false);
+                            setVideoLink('');
+                            setSubmissionNotes('');
+                          }}
+                          className="flex-1 py-4 bg-white/5 border border-white/10 text-white rounded-2xl font-black text-sm uppercase tracking-wider hover:bg-white/10 transition-colors"
+                        >
+                          Odustani
+                        </button>
+                      )}
+                      <button
+                        type="submit"
+                        disabled={submitting}
+                        className="w-full py-4 bg-primary text-black rounded-2xl font-black text-lg hover:scale-[1.02] active:scale-95 transition-transform disabled:opacity-50"
+                      >
+                        {submitting ? 'PREDAJEM...' : (isEditingSubmission ? 'SPREMI PROMJENE' : 'PREDAJ VIDEO URADAK')}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              );
+            })()
+          ) : (
+            /* Mentor/Creator View */
+            (() => {
+              const lectureSubs = submissions.filter(s => s.lectureId === selectedLecture.id);
+              const pendingSubs = lectureSubs.filter(s => s.status === 'pending');
+              const gradedSubs = lectureSubs.filter(s => s.status === 'graded');
+
+              return (
+                <div className="space-y-6">
+                  {/* Stats Bar */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-[#111116] border border-white/5 p-4 rounded-2xl text-center">
+                      <span className="text-2xl font-black text-[#F5A500]">{pendingSubs.length}</span>
+                      <span className="block text-[10px] text-muted-foreground uppercase font-black tracking-wider mt-1">Na Čekanju</span>
+                    </div>
+                    <div className="bg-[#111116] border border-white/5 p-4 rounded-2xl text-center">
+                      <span className="text-2xl font-black text-emerald-400">{gradedSubs.length}</span>
+                      <span className="block text-[10px] text-muted-foreground uppercase font-black tracking-wider mt-1">Ocijenjeno</span>
+                    </div>
+                  </div>
+
+                  {/* Pending Submissions */}
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-black text-white uppercase tracking-wider border-b border-white/5 pb-2 flex items-center gap-2">
+                      <span className="material-symbols-outlined text-sm text-[#F5A500]">pending_actions</span>
+                      Predaje na čekanju ({pendingSubs.length})
+                    </h3>
+                    
+                    {pendingSubs.length === 0 ? (
+                      <p className="text-xs text-muted-foreground italic pl-2">Nema novih predaja za ovaj seminar.</p>
+                    ) : (
+                      pendingSubs.map((sub) => (
+                        <div key={sub.id} className="bg-[#111116] border border-white/5 p-5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                          <div className="space-y-2 text-left">
+                            <div className="flex items-center gap-2">
+                              <img src={sub.userAvatar} alt={sub.username} className="w-6 h-6 rounded-full" />
+                              <span className="font-bold text-sm text-white">{sub.username}</span>
+                              <span className="text-[10px] text-muted-foreground font-mono">
+                                • {new Date(sub.createdAt).toLocaleDateString('hr-HR')}
+                              </span>
+                            </div>
+                            {sub.description && (
+                              <p className="text-xs text-[#8B8FA8] italic">"{sub.description}"</p>
+                            )}
+                            <a
+                              href={sub.videoLink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-bold"
+                            >
+                              <span className="material-symbols-outlined text-xs">play_arrow</span> Gledaj video
+                            </a>
+                          </div>
+
+                          <button
+                            onClick={() => {
+                              setSelectedSubmissionForGrading(sub);
+                              setGradeValue(5);
+                              setFeedbackText('');
+                            }}
+                            className="self-start md:self-center px-4 py-2 bg-primary text-black rounded-xl text-xs font-black uppercase tracking-wider hover:scale-105 active:scale-95 transition-transform shrink-0"
+                          >
+                            Ocijeni
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Graded Submissions */}
+                  <div className="space-y-4 pt-4">
+                    <h3 className="text-sm font-black text-white uppercase tracking-wider border-b border-white/5 pb-2 flex items-center gap-2">
+                      <span className="material-symbols-outlined text-sm text-emerald-400">verified</span>
+                      Ocijenjeno ({gradedSubs.length})
+                    </h3>
+
+                    {gradedSubs.length === 0 ? (
+                      <p className="text-xs text-muted-foreground italic pl-2">Još nema ocijenjenih predaja za ovaj seminar.</p>
+                    ) : (
+                      gradedSubs.map((sub) => (
+                        <div key={sub.id} className="bg-[#111116] border border-white/5 p-5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                          <div className="space-y-2 text-left">
+                            <div className="flex items-center gap-2">
+                              <img src={sub.userAvatar} alt={sub.username} className="w-6 h-6 rounded-full" />
+                              <span className="font-bold text-sm text-white">{sub.username}</span>
+                              <span className="text-[10px] text-muted-foreground font-mono">
+                                • Ocijenjeno: {new Date(sub.gradedAt || sub.createdAt).toLocaleDateString('hr-HR')}
+                              </span>
+                            </div>
+                            {sub.feedback && (
+                              <p className="text-xs text-[#8B8FA8]"><span className="font-bold text-white">Povratne informacije:</span> {sub.feedback}</p>
+                            )}
+                            <a
+                              href={sub.videoLink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-bold"
+                            >
+                              <span className="material-symbols-outlined text-xs">play_arrow</span> Gledaj video
+                            </a>
+                          </div>
+
+                          <div className="flex items-center gap-3 shrink-0">
+                            <div className="flex flex-col items-center justify-center w-14 h-14 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
+                              <span className="text-[9px] font-mono text-emerald-400 uppercase tracking-wider">Ocjena</span>
+                              <span className="text-xl font-black text-emerald-400">{sub.grade}</span>
+                            </div>
+                            <button
+                              onClick={() => {
+                                setSelectedSubmissionForGrading(sub);
+                                setGradeValue(sub.grade || 5);
+                                setFeedbackText(sub.feedback || '');
+                              }}
+                              className="px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] text-[#8B8FA8] uppercase font-bold hover:bg-white/10 transition-colors"
+                            >
+                              Uredi
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              );
+            })()
+          )}
+        </div>
+
+        {/* Grading Modal */}
+        {selectedSubmissionForGrading && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <div className="absolute inset-0 bg-background/80 backdrop-blur-xl" onClick={() => setSelectedSubmissionForGrading(null)} />
+            <div className="relative w-full max-w-md bg-[#111116] border border-white/5 p-8 rounded-[2.5rem] shadow-2xl overflow-y-auto max-h-[90vh] text-left">
+              <button 
+                type="button"
+                onClick={() => setSelectedSubmissionForGrading(null)}
+                className="absolute top-6 right-6 p-2 hover:bg-white/5 rounded-full text-muted-foreground transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              
+              <h2 className="text-2xl font-black uppercase tracking-tighter text-white mb-2">
+                Ocijeni <span className="text-primary">Video</span>
+              </h2>
+              <p className="text-xs text-muted-foreground uppercase tracking-widest mb-6">
+                Korisnik: {selectedSubmissionForGrading.username} | {selectedSubmissionForGrading.lectureTitle}
+              </p>
+
+              <form onSubmit={handleGradeSubmit} className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-muted-foreground uppercase ml-1">Odaberi Ocjenu (1 - 5)</label>
+                  <div className="flex gap-2">
+                    {[1, 2, 3, 4, 5].map((num) => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setGradeValue(num)}
+                        className={`flex-1 py-3 rounded-xl font-heading font-black text-lg transition-all flex items-center justify-center gap-1 ${
+                          gradeValue === num 
+                            ? 'bg-primary text-black shadow-lg shadow-primary/20' 
+                            : 'bg-white/5 text-[#8B8FA8] hover:bg-white/10'
+                        }`}
+                      >
+                        {num}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-muted-foreground uppercase ml-1">Komentar / Povratne informacije</label>
+                  <textarea
+                    required
+                    value={feedbackText}
+                    onChange={e => setFeedbackText(e.target.value)}
+                    rows={5}
+                    placeholder="Unesi povratne informacije, savjete, ocijeni hook, kadriranje, titlove, audio i slično..."
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-4 focus:border-primary focus:outline-none transition-colors text-white resize-none"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={grading}
+                  className="w-full py-4 bg-primary text-black rounded-2xl font-black text-lg hover:scale-[1.02] active:scale-95 transition-transform disabled:opacity-50"
+                >
+                  {grading ? 'SPREMANJE...' : 'SPREMI OCJENU (+100 XP Studentu)'}
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

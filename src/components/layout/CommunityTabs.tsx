@@ -1,18 +1,23 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '../../lib/utils';
-
-const SECONDARY_TABS = [
-  { label: 'Creator Hub', path: '/feed' },
-  { label: 'XP Rang Lista', path: '/leaderboard' },
-  { label: 'Kolege Kreatori', path: '/members' },
-];
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function CommunityTabs() {
   const location = useLocation();
+  const { profile } = useAuth();
+  const isAdmin = profile?.isAdmin === true;
+
+  const tabs = [
+    { label: 'Creator Hub', path: '/feed' }
+  ];
+
+  if (isAdmin) {
+    tabs.push({ label: 'Kolege Kreatori', path: '/members' });
+  }
 
   return (
     <nav className="flex px-4 border-b border-[rgba(255,255,255,0.06)] overflow-x-auto hide-scrollbar bg-[#0A0A0F] mb-4">
-      {SECONDARY_TABS.map((tab) => {
+      {tabs.map((tab) => {
         const isActive = location.pathname === tab.path;
         return (
           <Link

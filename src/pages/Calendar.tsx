@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Calendar as CalendarIcon, Clock, Video, User, Check, AlertCircle, X, Sparkles, ChevronLeft, ChevronRight, Plus, Trash2, Image as ImageIcon } from 'lucide-react';
+import { useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db, storage } from '../lib/firebase';
 import { collection, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
@@ -18,9 +19,11 @@ interface CalendarEvent {
   zoomLink: string;
   speaker: string;
   bgImage?: string;
+  creatorId?: string;
 }
 
 export default function Calendar() {
+  const [searchParams] = useSearchParams();
   const { profile, updateLocalProfile } = useAuth();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
@@ -44,6 +47,11 @@ export default function Calendar() {
     const unsubscribe = onSnapshot(collection(db, 'events'), (snap) => {
       const dbEvents = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as CalendarEvent));
       setEvents(dbEvents);
+    }, (err) => {
+      console.warn('[Calendar] Events fetch error, using mock fallback:', err);
+      import('../lib/firebase-mock').then(({ SEED_EVENTS }) => {
+        setEvents(SEED_EVENTS as any[]);
+      });
     });
     
     // Load RSVPs from localStorage
@@ -54,6 +62,17 @@ export default function Calendar() {
     
     return unsubscribe;
   }, []);
+
+  // Automatically open event details sheet if eventId search param is present
+  useEffect(() => {
+    const eventId = searchParams.get('eventId');
+    if (eventId && events.length > 0) {
+      const match = events.find(e => e.id === eventId);
+      if (match) {
+        setSelectedEvent(match);
+      }
+    }
+  }, [searchParams, events]);
 
   const handleRsvp = (eventId: string) => {
     if (rsvpList.includes(eventId)) return;
@@ -350,7 +369,16 @@ export default function Calendar() {
                   </div>
                   <div className="flex flex-col">
                     <span className="font-mono font-[700] text-[10px] text-[#8B8FA8] uppercase tracking-widest">Host</span>
-                    <span className="font-sans font-[700] text-[14px] text-[#FFFFFF]">{selectedEvent.speaker}</span>
+                    {selectedEvent.creatorId ? (
+                      <Link 
+                        to={`/creator/${selectedEvent.creatorId}`} 
+                        className="font-sans font-[700] text-[14px] text-[#F5A500] hover:underline transition-all"
+                      >
+                        {selectedEvent.speaker}
+                      </Link>
+                    ) : (
+                      <span className="font-sans font-[700] text-[14px] text-[#FFFFFF]">{selectedEvent.speaker}</span>
+                    )}
                   </div>
                 </div>
               </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { Users, Copy, Check } from 'lucide-react';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -42,7 +42,7 @@ function formatJoinDate(createdAt: unknown): string {
 }
 
 export default function Members() {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, profile, loading: authLoading } = useAuth();
   const [members, setMembers] = useState<MemberEntry[]>([]);
   const [allProfiles, setAllProfiles] = useState<MemberEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,6 +52,10 @@ export default function Members() {
   const unpaidEmails = allProfiles
     .filter((m) => m.status !== 'active' && m.email)
     .map((m) => m.email as string);
+
+  if (!authLoading && profile && !profile.isAdmin) {
+    return <Navigate to="/feed" replace />;
+  }
 
   useEffect(() => {
     if (!currentUser) {

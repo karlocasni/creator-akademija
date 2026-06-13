@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import Leaderboard from '../components/feed/Leaderboard';
 import { User, Phone, Mail, Camera, ShieldCheck, LogOut, ArrowLeft, ChevronDown, KeyRound, Flame, Target, Bookmark, Trash2, TrendingUp } from 'lucide-react';
 import { db, storage, auth } from '../lib/firebase';
-import { doc, setDoc, getDoc, collection, query, where, getDocs, limit, onSnapshot, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, collection, query, where, getDocs, limit, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import XPBadge from '../components/ui/XPBadge';
@@ -24,7 +25,7 @@ function parseFirestoreDate(val: unknown): Date | null {
 
 const GOAL_OPTIONS = [1, 2, 3, 5, 7];
 
-type ProfileTab = 'profil' | 'ciljevi' | 'spremljeno';
+type ProfileTab = 'profil' | 'rang-lista' | 'ciljevi' | 'spremljeno';
 type SavedSubTab = 'ideje' | 'hookovi' | 'trendovi';
 
 export default function Profile() {
@@ -332,6 +333,15 @@ export default function Profile() {
             </div>
           )}
 
+          {viewedProfile?.isCreator && (
+            <Link
+              to={`/creator/${viewedProfile.uid || paramId}`}
+              className="mt-4 px-6 py-2.5 bg-primary text-black rounded-full font-heading font-bold text-xs uppercase tracking-wider hover:scale-105 active:scale-95 transition-all shadow-[0_0_15px_rgba(245,165,0,0.3)]"
+            >
+              POGLEDAJ STRANICU MENTORA
+            </Link>
+          )}
+
           {/* Streak badge — only own profile */}
           {isOwnProfile && streak > 0 && (
             <div className="flex items-center gap-2 mt-3 px-4 py-2 rounded-full bg-[rgba(245,165,0,0.1)] border border-[rgba(245,165,0,0.2)]">
@@ -378,6 +388,7 @@ export default function Profile() {
           <div className="flex gap-1 p-1 bg-[#111116] rounded-2xl border border-[rgba(255,255,255,0.06)]">
             {([
               { key: 'profil', label: 'Profil' },
+              { key: 'rang-lista', label: 'Rang Lista' },
               { key: 'ciljevi', label: 'Ciljevi' },
               { key: 'spremljeno', label: 'Spremljeno' },
             ] as { key: ProfileTab; label: string }[]).map(tab => (
@@ -605,6 +616,43 @@ export default function Profile() {
                       </button>
                     </div>
                   </div>
+
+                  <div className="ursa-card p-6 border border-primary/20 bg-primary/5">
+                    <h3 className="text-sm font-black text-primary uppercase mb-4">Admin Kontrole: Creator Uloga</h3>
+                    <p className="text-xs text-muted-foreground mb-4">
+                      {viewedProfile?.isCreator 
+                        ? 'Ovaj korisnik je trenutno MENTOR/KREATOR i drži predavanja.' 
+                        : 'Ovaj korisnik je trenutno običan član/student.'}
+                    </p>
+                    <button
+                      onClick={async () => {
+                        const newCreatorStatus = !viewedProfile?.isCreator;
+                        const confirmMsg = newCreatorStatus 
+                          ? 'Jesi li siguran da želiš promaknuti ovog korisnika u mentora?' 
+                          : 'Jesi li siguran da želiš ukloniti mentorska prava ovom korisniku?';
+                        if (!window.confirm(confirmMsg)) return;
+                        
+                        try {
+                          await updateDoc(doc(db, 'profiles', paramId), {
+                            isCreator: newCreatorStatus,
+                            mainTopic: newCreatorStatus ? 'Produkcija' : null
+                          });
+                          alert(newCreatorStatus ? 'Korisnik promaknut u mentora!' : 'Mentorska prava uklonjena.');
+                          setViewedProfile(prev => prev ? { ...prev, isCreator: newCreatorStatus } : null);
+                        } catch (err) {
+                          alert('Greška pri ažuriranju uloge: ' + err);
+                        }
+                      }}
+                      className={`w-full py-3 rounded-xl text-sm font-black hover:scale-[1.02] transition-transform ${
+                        viewedProfile?.isCreator 
+                          ? 'bg-red-500/20 border border-red-500/30 text-red-400' 
+                          : 'bg-primary text-black'
+                      }`}
+                    >
+                      {viewedProfile?.isCreator ? 'UKLONI MENTOR STATUS' : 'PROMAKNI U MENTORA'}
+                    </button>
+                  </div>
+
                   <button
                     onClick={async () => {
                       if (!window.confirm('Jesi li siguran da želiš obrisati ovog korisnika?')) return;
@@ -626,6 +674,13 @@ export default function Profile() {
               )}
             </div>
           )
+        )}
+
+        {/* ══════════ RANG LISTA TAB ══════════ */}
+        {isOwnProfile && activeTab === 'rang-lista' && (
+          <div className="ursa-card p-6">
+            <Leaderboard />
+          </div>
         )}
 
         {/* ══════════ CILJEVI TAB ══════════ */}

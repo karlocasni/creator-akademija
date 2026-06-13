@@ -21,8 +21,12 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [username, setUsername] = useState('');
   const [gender, setGender] = useState<'male' | 'female'>('male');
+  const [age, setAge] = useState('');
+  const [instagram, setInstagram] = useState('');
+  const [tiktok, setTiktok] = useState('');
   const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
@@ -31,35 +35,61 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
     e.preventDefault();
     setLoading(true);
 
+    if (!isLogin && password !== confirmPassword) {
+      alert('Lozinke se ne podudaraju.');
+      setLoading(false);
+      return;
+    }
+
     try {
       if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        
+        const isBypassed = user.email === 'ismael@akademija.com' ||
+                           (user.email || '').toLowerCase().includes('admin') ||
+                           (user.displayName || '').toLowerCase().includes('admin');
+        
+        // Provjeri je li email verificiran (osim ako nije admin ili mock korisnik)
+        if (!user.emailVerified && !isBypassed) {
+          alert('Molimo potvrdite vašu email adresu. Poslan vam je link za verifikaciju.');
+          await sendEmailVerification(user);
+          await auth.signOut();
+          setLoading(false);
+          return;
+        }
       } else {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
         const finalUsername = username || email.split('@')[0];
+        const cleanUsername = finalUsername.startsWith('@') ? finalUsername : `@${finalUsername}`;
         
-        // Postavi ime na Auth objektu kako bi radilo u %DISPLAY_NAME% predlošku
-        await updateProfile(user, { displayName: finalUsername });
+        // Postavi ime na Auth objektu
+        await updateProfile(user, { displayName: cleanUsername });
         
-        // Zatraži od cloud funkcije da generira i pošalje custom HTML verifikacijski link
-        try {
-          const sendCustomVerification = httpsCallable(functions, 'sendCustomVerificationEmail');
-          await sendCustomVerification();
-        } catch (emailErr) {
-          console.error("Neuspjelo slanje verifikacijskog emaila:", emailErr);
-        }
+        // Pošalji standardni Firebase verifikacijski email
+        await sendEmailVerification(user);
         
+        const cleanInstagram = instagram ? (instagram.startsWith('@') ? instagram : `@${instagram}`) : '';
+        const cleanTiktok = tiktok ? (tiktok.startsWith('@') ? tiktok : `@${tiktok}`) : '';
+
         // Create profile in Firestore
         await setDoc(doc(db, 'profiles', user.uid), {
-          username: finalUsername,
+          username: cleanUsername,
           email,
           status: 'inactive',
           xp: 0,
           level: 1,
           gender,
+          age: parseInt(age) || null,
+          instagram: cleanInstagram,
+          tiktok: cleanTiktok,
           createdAt: new Date().toISOString()
         });
+
+        alert('Registracija uspješna! Poslan je link za verifikaciju na vaš email. Potvrdite ga prije prijave.');
+        // Odjavi se odmah kako bi se morao prijaviti nakon verifikacije
+        await auth.signOut();
       }
       onClose();
     } catch (err: any) {
@@ -102,7 +132,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
               <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Korisničko ime"
+                placeholder="Korisničko ime / Nadimak (npr. @kreator)"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 focus:border-primary focus:outline-none transition-colors text-white"
@@ -112,31 +142,66 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
           )}
 
           {!isLogin && (
-            <div className="relative flex gap-4">
-              <label className="flex-1 flex items-center justify-center gap-2 p-4 rounded-2xl border cursor-pointer transition-colors bg-white/5 text-white hover:border-primary/50
-                has-[:checked]:border-primary has-[:checked]:bg-primary/10">
+            <div className="flex gap-4">
+              <div className="flex-[2] flex gap-2">
+                <label className={`flex-1 flex items-center justify-center gap-2 p-3.5 rounded-2xl border cursor-pointer transition-colors bg-white/5 text-white hover:border-primary/50 ${gender === 'male' ? 'border-primary bg-primary/10' : 'border-white/10'}`}>
+                  <input
+                    type="radio"
+                    name="gender"
+                    value="male"
+                    checked={gender === 'male'}
+                    onChange={() => setGender('male')}
+                    className="hidden"
+                  />
+                  <span className="font-bold text-xs uppercase">Muško</span>
+                </label>
+                <label className={`flex-1 flex items-center justify-center gap-2 p-3.5 rounded-2xl border cursor-pointer transition-colors bg-white/5 text-white hover:border-primary/50 ${gender === 'female' ? 'border-primary bg-primary/10' : 'border-white/10'}`}>
+                  <input
+                    type="radio"
+                    name="gender"
+                    value="female"
+                    checked={gender === 'female'}
+                    onChange={() => setGender('female')}
+                    className="hidden"
+                  />
+                  <span className="font-bold text-xs uppercase">Žensko</span>
+                </label>
+              </div>
+              <div className="flex-1">
                 <input
-                  type="radio"
-                  name="gender"
-                  value="male"
-                  checked={gender === 'male'}
-                  onChange={() => setGender('male')}
-                  className="hidden"
+                  type="number"
+                  placeholder="Dob"
+                  value={age}
+                  onChange={(e) => setAge(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-4 text-center focus:border-primary focus:outline-none transition-colors text-white text-sm"
+                  min="10"
+                  max="100"
+                  required
                 />
-                <span className="font-bold text-sm uppercase">Muško</span>
-              </label>
-              <label className="flex-1 flex items-center justify-center gap-2 p-4 rounded-2xl border cursor-pointer transition-colors bg-white/5 text-white hover:border-primary/50
-                has-[:checked]:border-primary has-[:checked]:bg-primary/10">
+              </div>
+            </div>
+          )}
+
+          {!isLogin && (
+            <div className="flex gap-4">
+              <div className="flex-1">
                 <input
-                  type="radio"
-                  name="gender"
-                  value="female"
-                  checked={gender === 'female'}
-                  onChange={() => setGender('female')}
-                  className="hidden"
+                  type="text"
+                  placeholder="Instagram (npr. @kreator)"
+                  value={instagram}
+                  onChange={(e) => setInstagram(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-4 focus:border-primary focus:outline-none transition-colors text-white text-sm"
                 />
-                <span className="font-bold text-sm uppercase">Žensko</span>
-              </label>
+              </div>
+              <div className="flex-1">
+                <input
+                  type="text"
+                  placeholder="TikTok (npr. @kreator)"
+                  value={tiktok}
+                  onChange={(e) => setTiktok(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-4 focus:border-primary focus:outline-none transition-colors text-white text-sm"
+                />
+              </div>
             </div>
           )}
           
@@ -163,6 +228,20 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
               required
             />
           </div>
+
+          {!isLogin && (
+            <div className="relative">
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+              <input
+                type="password"
+                placeholder="Potvrdi lozinku"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 focus:border-primary focus:outline-none transition-colors text-white"
+                required
+              />
+            </div>
+          )}
 
           <button 
             type="submit"

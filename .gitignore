@@ -32,3 +32,8 @@ functions/.env
 
 # Local Cache
 .npm-cache
+
+# Environment variables
+.env
+.env.local
+.env.*.local

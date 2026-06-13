@@ -9,7 +9,7 @@ export const bottomNavEventTarget = new EventTarget();
 const navItems = [
   { label: 'Zajednica', icon: 'home', path: '/feed' },
   { label: 'Tečajevi', icon: 'play_circle', path: '/lectures' },
-  { label: 'Alati', icon: 'auto_awesome', path: '/tools' },
+  { label: 'Predaja', icon: 'upload', path: '/submissions' },
   { label: 'Kalendar', icon: 'calendar_month', path: '/calendar' },
 ];
 

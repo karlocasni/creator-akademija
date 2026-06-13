@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { auth, db } from '../lib/firebase';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import { onAuthStateChanged, User, signOut as firebaseSignOut } from 'firebase/auth';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { UserProfile } from '../types/post';
+import { seedRealFirebase } from '../lib/seeder';
 
 interface AuthContextType {
   user: User | null;
@@ -31,12 +32,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(firebaseUser);
 
       if (firebaseUser) {
+        // Auto-seed real Firestore if collections are empty
+        seedRealFirebase();
+
         // Sync profile from mock Firestore
         const profileRef = doc(db, 'profiles', firebaseUser.uid);
         const unsubProfile = onSnapshot(profileRef, (snap) => {
           const isUserAdmin = firebaseUser.email === 'ismael@akademija.com' || 
+                              (firebaseUser.email || '').toLowerCase().includes('admin') ||
                               (firebaseUser.displayName || '').toLowerCase().includes('ismael') || 
-                              (firebaseUser.displayName || '').toLowerCase().includes('kreator student');
+                              (firebaseUser.displayName || '').toLowerCase().includes('kreator student') ||
+                              (firebaseUser.displayName || '').toLowerCase().includes('admin');
                               
           if (snap.exists()) {
             const data = snap.data() as UserProfile;
@@ -51,10 +57,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               xp: 150,
               level: 1,
               createdAt: new Date().toISOString(),
-              isAdmin: firebaseUser.email === 'ismael@akademija.com' || (firebaseUser.displayName || '').toLowerCase().includes('ismael') || (firebaseUser.displayName || '').toLowerCase().includes('kreator student')
+              isAdmin: isUserAdmin
             };
             setProfile(newProfile);
+            setDoc(profileRef, newProfile, { merge: true }).catch(err => {
+              console.warn('[AuthContext] Failed to write fallback profile:', err);
+            });
           }
+          setLoading(false);
+        }, (error) => {
+          console.warn('[AuthContext] Profile fetch error:', error);
+          const isUserAdmin = firebaseUser.email === 'ismael@akademija.com' || 
+                              (firebaseUser.email || '').toLowerCase().includes('admin') ||
+                              (firebaseUser.displayName || '').toLowerCase().includes('admin');
+          const fallbackProfile: UserProfile = {
+            uid: firebaseUser.uid,
+            username: firebaseUser.displayName || 'Kreator Student',
+            email: firebaseUser.email || '',
+            status: 'active',
+            xp: 150,
+            level: 1,
+            createdAt: new Date().toISOString(),
+            isAdmin: isUserAdmin
+          };
+          setProfile(fallbackProfile);
           setLoading(false);
         });
 
@@ -75,7 +101,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signOutUser = async () => {
     setUser(null);
     setProfile(null);
-    await auth.signOut();
+    await firebaseSignOut(auth);
   };
 
   const updateLocalProfile = (updates: Partial<UserProfile>) => {

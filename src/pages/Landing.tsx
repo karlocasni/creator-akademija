@@ -298,8 +298,8 @@ export default function Landing() {
           <h2 className="text-2xl md:text-4xl font-black uppercase tracking-tight text-white">
             NAŠ CURRICULUM OD 9 LEKCIJA
           </h2>
-          <p className="text-xs text-muted-foreground mt-2 max-w-md mx-auto">
-            Evo točnog rasporeda svih lekcija koje te čekaju u bazi znanja:
+          <p className="text-xs text-muted-foreground mt-2 max-w-xl mx-auto leading-relaxed">
+            Započinjemo s 9 uvodnih lekcija koje ti daju sve temelje, a uskoro stiže <span className="text-primary font-black drop-shadow-[0_0_8px_rgba(245,165,0,0.6)] animate-pulse">još mnogo više od raznih vodećih kreatora s Balkana</span> kako bi uvijek pratio najnovije trendove!
           </p>
         </motion.div>
 

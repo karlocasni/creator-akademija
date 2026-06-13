@@ -201,61 +201,15 @@ export default function CommentSection({ postId, postAuthorId }: CommentSectionP
   };
 
   return (
-    <div className="pt-6 space-y-6">
-      {/* Comment input */}
-      <div className="flex gap-3">
-        <div className="w-8 h-8 rounded-full bg-accent flex-shrink-0 overflow-hidden">
-          <img src={avatarUrl} alt="Me" className="w-full h-full rounded-full" />
-        </div>
-        <div className="flex-1 relative">
-          <input
-            ref={inputRef}
-            type="text"
-            value={comment}
-            onChange={handleCommentChange}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                setActiveMention(null);
-              } else if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSubmit();
-              }
-            }}
-            placeholder={user ? 'Napiši komentar...' : 'Prijavi se za komentar'}
-            disabled={!user || submitting}
-            className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-4 pr-12 text-sm focus:outline-none focus:border-primary/50 transition-colors disabled:opacity-50"
-          />
-          <button
-            onClick={handleSubmit}
-            disabled={!comment.trim() || !user || submitting}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-primary hover:scale-110 transition-transform disabled:opacity-30"
-          >
-            {submitting ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Mention dropdown */}
-      {activeMention !== null && mentionResults.length > 0 && (
-        <MentionDropdown
-          users={mentionResults}
-          onSelect={handleMentionSelect}
-          position={mentionPos}
-        />
-      )}
-
+    <div className="flex flex-col h-full max-h-[70vh] md:max-h-[500px] text-left">
       {/* Comment list */}
-      <div className="space-y-4">
+      <div className="flex-1 overflow-y-auto pr-1 pb-4 space-y-4 min-h-[150px]">
         {loadingComments ? (
-          <div className="flex items-center justify-center py-4">
+          <div className="flex items-center justify-center py-8">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
           </div>
         ) : comments.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-2">
+          <p className="text-xs text-muted-foreground text-center py-8">
             Još nema komentara. Budi prvi!
           </p>
         ) : (
@@ -264,7 +218,7 @@ export default function CommentSection({ postId, postAuthorId }: CommentSectionP
               <Link to={user?.uid === c.authorId ? '/profile' : `/profile/${c.authorId}`}>
                 <img
                   src={c.authorAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${c.authorName}`}
-                  className="w-8 h-8 rounded-full flex-shrink-0 hover:ring-2 ring-primary/50 transition-all"
+                  className="w-8 h-8 rounded-full flex-shrink-0 hover:ring-2 ring-primary/50 transition-all object-cover"
                   alt=""
                   onError={(e) => {
                     (e.currentTarget as HTMLImageElement).src =
@@ -311,6 +265,52 @@ export default function CommentSection({ postId, postAuthorId }: CommentSectionP
             </div>
           ))
         )}
+      </div>
+
+      {/* Mention dropdown */}
+      {activeMention !== null && mentionResults.length > 0 && (
+        <MentionDropdown
+          users={mentionResults}
+          onSelect={handleMentionSelect}
+          position={mentionPos}
+        />
+      )}
+
+      {/* Comment input */}
+      <div className="pt-4 border-t border-white/5 bg-[#111116] sticky bottom-0 z-10 flex gap-3">
+        <div className="w-8 h-8 rounded-full bg-accent flex-shrink-0 overflow-hidden">
+          <img src={avatarUrl} alt="Me" className="w-full h-full rounded-full" />
+        </div>
+        <div className="flex-1 relative">
+          <input
+            ref={inputRef}
+            type="text"
+            value={comment}
+            onChange={handleCommentChange}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setActiveMention(null);
+              } else if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit();
+              }
+            }}
+            placeholder={user ? 'Napiši komentar...' : 'Prijavi se za komentar'}
+            disabled={!user || submitting}
+            className="w-full bg-white/5 border border-white/10 rounded-xl py-2.5 pl-4 pr-12 text-sm focus:outline-none focus:border-primary/50 transition-colors disabled:opacity-50 text-white"
+          />
+          <button
+            onClick={handleSubmit}
+            disabled={!comment.trim() || !user || submitting}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-primary hover:scale-110 transition-transform disabled:opacity-30"
+          >
+            {submitting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Send className="w-4 h-4" />
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );
