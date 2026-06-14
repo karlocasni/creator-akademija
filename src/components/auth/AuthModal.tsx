@@ -4,6 +4,7 @@ import { auth, db, functions } from '../../lib/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, updateProfile } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import { isDemoCredentials, setDemoSession } from '../../lib/demoAuth';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -43,6 +44,14 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
 
     try {
       if (isLogin) {
+        // Demo/mock admin login — bypasses Firebase entirely.
+        if (isDemoCredentials(email, password)) {
+          setDemoSession();
+          setLoading(false);
+          onClose();
+          return;
+        }
+
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
         

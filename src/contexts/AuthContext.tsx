@@ -4,6 +4,7 @@ import { onAuthStateChanged, User, signOut as firebaseSignOut } from 'firebase/a
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { UserProfile } from '../types/post';
 import { seedRealFirebase } from '../lib/seeder';
+import { hasDemoSession, clearDemoSession, demoUser, demoProfile, DEMO_AUTH_EVENT } from '../lib/demoAuth';
 
 interface AuthContextType {
   user: User | null;
@@ -27,8 +28,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Apply the local demo session (admin@akademija.com) if present.
+    const applyDemoSession = () => {
+      if (hasDemoSession()) {
+        setUser(demoUser);
+        setProfile(demoProfile);
+        setLoading(false);
+        return true;
+      }
+      return false;
+    };
+
+    applyDemoSession();
+    window.addEventListener(DEMO_AUTH_EVENT, applyDemoSession);
+
     // Listen to mock auth state changes
     const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      // Demo session takes priority and ignores Firebase auth state.
+      if (hasDemoSession()) return;
+
       setUser(firebaseUser);
 
       if (firebaseUser) {
@@ -95,12 +113,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     return () => {
       unsubscribeAuth();
+      window.removeEventListener(DEMO_AUTH_EVENT, applyDemoSession);
     };
   }, []);
 
   const signOutUser = async () => {
     setUser(null);
     setProfile(null);
+    if (hasDemoSession()) {
+      clearDemoSession();
+      return;
+    }
     await firebaseSignOut(auth);
   };
 
