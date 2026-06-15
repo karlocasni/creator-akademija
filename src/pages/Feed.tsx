@@ -10,13 +10,12 @@ import {
   startAfter,
   getDocs,
   DocumentSnapshot,
-  updateDoc,
   doc,
-  arrayUnion,
-  arrayRemove,
   setDoc,
   serverTimestamp,
   Timestamp,
+  where,
+  deleteDoc,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { FirestorePost } from '../types/post';
@@ -65,6 +64,19 @@ function InstagramPostCard({ post, onBack }: InstagramPostCardProps) {
   const [likeLoading, setLikeLoading] = useState(false);
   const navigate = useNavigate();
 
+  // Real-time likes from subcollection posts/{postId}/likes
+  const [likeCount, setLikeCount] = useState(0);
+  const [isLiked, setIsLiked] = useState(false);
+
+  useEffect(() => {
+    const likesRef = collection(doc(db, 'posts', post.id), 'likes');
+    const unsub = onSnapshot(likesRef, (snap) => {
+      setLikeCount(snap.size);
+      setIsLiked(!!user && snap.docs.some(d => d.id === user.uid));
+    });
+    return unsub;
+  }, [post.id, user?.uid]);
+
   useEffect(() => {
     if (!videoRef.current) return;
     const observer = new IntersectionObserver(
@@ -103,18 +115,17 @@ function InstagramPostCard({ post, onBack }: InstagramPostCardProps) {
     }
   };
 
-  const likes: string[] = Array.isArray(post.likes) ? post.likes : [];
-  const isLiked = likes.includes(user?.uid ?? '');
-
   const toggleLike = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!user || likeLoading) return;
     setLikeLoading(true);
-    const adding = !isLiked;
+    const likeRef = doc(db, 'posts', post.id, 'likes', user.uid);
     try {
-      await updateDoc(doc(db, 'posts', post.id), {
-        likes: adding ? arrayUnion(user.uid) : arrayRemove(user.uid),
-      });
+      if (!isLiked) {
+        await setDoc(likeRef, { userId: user.uid, createdAt: serverTimestamp() });
+      } else {
+        await deleteDoc(likeRef);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -238,7 +249,7 @@ function InstagramPostCard({ post, onBack }: InstagramPostCardProps) {
               local_fire_department
             </span>
           </button>
-          <span className="text-[10px] font-bold text-white/80 font-mono leading-none">{likes.length}</span>
+          <span className="text-[10px] font-bold text-white/80 font-mono leading-none">{likeCount}</span>
         </div>
 
         {/* Comment */}
@@ -346,11 +357,18 @@ export default function Feed() {
   }, []);
 
   useEffect(() => {
-    const q = query(collection(db, 'profiles'), orderBy('xp', 'desc'), limit(10));
+    // Active members = profiles where lastActiveAt is within the last 24 hours
+    const threshold = Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000));
+    const q = query(
+      collection(db, 'profiles'),
+      where('lastActiveAt', '>=', threshold),
+      orderBy('lastActiveAt', 'desc'),
+      limit(20),
+    );
     const unsub = onSnapshot(q, (snap) => {
       setActiveMembers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (err) => {
-      console.warn('[Feed] Profiles fetch error, using mock:', err);
+      console.warn('[Feed] Active members fetch error, using mock:', err);
       import('../lib/firebase-mock').then(({ SEED_PROFILES }) => {
         setActiveMembers(Object.values(SEED_PROFILES));
       });

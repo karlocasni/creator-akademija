@@ -33,30 +33,36 @@ export default function Landing() {
       />
 
       {/* Header */}
-      <header className="fixed top-0 inset-x-0 z-[60] py-4 px-6 md:px-12 flex justify-between items-center bg-background/80 backdrop-blur-xl border-b border-white/5">
-        <div className="flex items-center gap-2">
-          <span className="font-extrabold text-lg md:text-2xl tracking-tighter uppercase text-white flex items-center gap-2">
-            CREATOR <span className="text-primary font-marker normal-case tracking-normal text-xl md:text-3xl">Akademija</span>
-          </span>
-        </div>
-        <div className="flex items-center gap-4">
-          <button 
-            onClick={() => openAuth('login')}
-            className="px-5 py-2 text-xs md:text-sm font-black text-white hover:text-primary transition-colors tracking-wider uppercase"
-          >
-            Prijava
-          </button>
-          <button 
-            onClick={() => openAuth('register')}
-            className="px-5 py-2.5 bg-primary text-black rounded-full font-black text-xs md:text-sm hover:scale-105 transition-transform tracking-wider uppercase shadow-md shadow-primary/20"
-          >
-            KRENI ODMAH
-          </button>
+      <header
+        className="fixed top-0 inset-x-0 z-[60] px-6 md:px-12 flex flex-col justify-end md:flex-row md:items-center bg-background/80 backdrop-blur-xl border-b border-white/5"
+        style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 20px)' }}
+      >
+        {/* Inner row – always a row, just padded differently per breakpoint */}
+        <div className="flex justify-between items-center w-full pb-3 md:py-4">
+          <div className="flex items-center gap-2">
+            <span className="font-extrabold text-lg md:text-2xl tracking-tighter uppercase text-white flex items-center gap-2">
+              CREATOR <span className="text-primary font-marker normal-case tracking-normal text-xl md:text-3xl">Akademija</span>
+            </span>
+          </div>
+          <div className="flex items-center gap-3 md:gap-4">
+            <button
+              onClick={() => openAuth('login')}
+              className="px-4 py-2.5 md:px-5 md:py-2 min-h-[44px] text-xs md:text-sm font-black text-white hover:text-primary transition-colors tracking-wider uppercase"
+            >
+              Prijava
+            </button>
+            <button
+              onClick={() => openAuth('register')}
+              className="px-4 py-2.5 md:px-5 min-h-[44px] bg-primary text-black rounded-full font-black text-xs md:text-sm hover:scale-105 transition-transform tracking-wider uppercase shadow-md shadow-primary/20"
+            >
+              KRENI ODMAH
+            </button>
+          </div>
         </div>
       </header>
       
       {/* Hero Section */}
-      <section className="relative pt-32 pb-20 px-6 overflow-hidden flex flex-col items-center">
+      <section className="relative pt-36 md:pt-32 pb-20 px-6 overflow-hidden flex flex-col items-center">
         {/* Decorative background glows */}
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[700px] h-[700px] bg-primary/10 rounded-full blur-[140px] pointer-events-none" />
         

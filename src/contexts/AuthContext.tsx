@@ -1,9 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { auth, db } from '../lib/firebase';
 import { onAuthStateChanged, User, signOut as firebaseSignOut } from 'firebase/auth';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
 import { UserProfile } from '../types/post';
-import { seedRealFirebase } from '../lib/seeder';
 
 interface AuthContextType {
   user: User | null;
@@ -32,13 +31,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(firebaseUser);
 
       if (firebaseUser) {
-        // Auto-seed real Firestore if collections are empty
-        seedRealFirebase();
 
-        // Sync profile from mock Firestore
+        // Stamp the user as active right now so the active-members row is fresh
+        setDoc(doc(db, 'profiles', firebaseUser.uid), { lastActiveAt: serverTimestamp() }, { merge: true })
+          .catch(err => console.warn('[AuthContext] Failed to update lastActiveAt:', err));
         const profileRef = doc(db, 'profiles', firebaseUser.uid);
         const unsubProfile = onSnapshot(profileRef, (snap) => {
-          const isUserAdmin = firebaseUser.email === 'ismael@akademija.com' || 
+          const isUserAdmin = firebaseUser.email === 'ismael.hadzic17@gmail.com' || 
+                              firebaseUser.email === 'brunovujcec6@gmail.com' || 
                               (firebaseUser.email || '').toLowerCase().includes('admin') ||
                               (firebaseUser.displayName || '').toLowerCase().includes('ismael') || 
                               (firebaseUser.displayName || '').toLowerCase().includes('kreator student') ||
@@ -46,6 +46,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                               
           if (snap.exists()) {
             const data = snap.data() as UserProfile;
+            
+            // Expiration check
+            if (data.accessUntil && new Date(data.accessUntil).getTime() < Date.now()) {
+              alert('Vaš pristup platformi je istekao.');
+              firebaseSignOut(auth);
+              return;
+            }
+
             setProfile({ ...data, isAdmin: isUserAdmin });
           } else {
             // Seed a default active profile
@@ -67,7 +75,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           setLoading(false);
         }, (error) => {
           console.warn('[AuthContext] Profile fetch error:', error);
-          const isUserAdmin = firebaseUser.email === 'ismael@akademija.com' || 
+          const isUserAdmin = firebaseUser.email === 'ismael.hadzic17@gmail.com' || 
+                              firebaseUser.email === 'brunovujcec6@gmail.com' || 
                               (firebaseUser.email || '').toLowerCase().includes('admin') ||
                               (firebaseUser.displayName || '').toLowerCase().includes('admin');
           const fallbackProfile: UserProfile = {

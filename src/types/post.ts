@@ -54,6 +54,7 @@ export interface UserProfile {
   streak?: number;
   streakWeekStart?: string;
   isCreator?: boolean;
+  accessUntil?: string | null;
   mainTopic?: string;
 }
 

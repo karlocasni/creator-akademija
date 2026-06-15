@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, Clock, Video, User, Check, AlertCircle, X, Sparkles, ChevronLeft, ChevronRight, Plus, Trash2, Image as ImageIcon } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, Video, User, Check, AlertCircle, X, Sparkles, ChevronLeft, ChevronRight, Plus, Trash2, Image as ImageIcon, Lock } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db, storage } from '../lib/firebase';
-import { collection, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, deleteDoc, doc, setDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -24,7 +24,7 @@ interface CalendarEvent {
 
 export default function Calendar() {
   const [searchParams] = useSearchParams();
-  const { profile, updateLocalProfile } = useAuth();
+  const { user, profile, updateLocalProfile } = useAuth();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [rsvpList, setRsvpList] = useState<string[]>([]);
@@ -43,7 +43,7 @@ export default function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
 
   useEffect(() => {
-    // Read events from mock Firestore
+    // Read events from Firestore in real time
     const unsubscribe = onSnapshot(collection(db, 'events'), (snap) => {
       const dbEvents = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as CalendarEvent));
       setEvents(dbEvents);
@@ -53,15 +53,43 @@ export default function Calendar() {
         setEvents(SEED_EVENTS as any[]);
       });
     });
-    
-    // Load RSVPs from localStorage
-    const saved = localStorage.getItem('creator_mock_rsvps');
-    if (saved) {
-      setRsvpList(JSON.parse(saved));
-    }
-    
     return unsubscribe;
   }, []);
+
+  // Load RSVPs from Firestore for the current user
+  useEffect(() => {
+    if (!user) return;
+    // We query all rsvp docs across events where userId == current user
+    // Simpler: track locally in state, verified on-demand per event
+    // We load them when the modal opens; here we just pre-load a list of rsvp'd eventIds
+    const loadRsvps = async () => {
+      try {
+        // Collect rsvp docs by querying each event would be expensive;
+        // instead we maintain a mirror list in the user's profile document
+        // by storing rsvp'd event IDs there. But the canonical source of truth
+        // is always events/{id}/rsvps/{userId}.
+        // For the UI we just check the subcollection when needed.
+      } catch (err) {
+        console.warn('[Calendar] RSVP load error:', err);
+      }
+    };
+    loadRsvps();
+  }, [user]);
+
+  // When selectedEvent changes, check if current user has RSVP'd
+  useEffect(() => {
+    if (!selectedEvent || !user) return;
+    const rsvpRef = doc(db, 'events', selectedEvent.id, 'rsvps', user.uid);
+    import('firebase/firestore').then(({ getDoc }) => {
+      getDoc(rsvpRef).then(snap => {
+        if (snap.exists()) {
+          setRsvpList(prev => prev.includes(selectedEvent.id) ? prev : [...prev, selectedEvent.id]);
+        } else {
+          setRsvpList(prev => prev.filter(id => id !== selectedEvent.id));
+        }
+      }).catch(() => {});
+    });
+  }, [selectedEvent?.id, user?.uid]);
 
   // Automatically open event details sheet if eventId search param is present
   useEffect(() => {
@@ -74,22 +102,25 @@ export default function Calendar() {
     }
   }, [searchParams, events]);
 
-  const handleRsvp = (eventId: string) => {
-    if (rsvpList.includes(eventId)) return;
-    
-    const newList = [...rsvpList, eventId];
-    setRsvpList(newList);
-    localStorage.setItem('creator_mock_rsvps', JSON.stringify(newList));
-    setJustRsvpd(true);
-    
-    // Award XP!
-    if (profile) {
-      updateLocalProfile({ xp: profile.xp + 50 });
+  const handleRsvp = async (eventId: string) => {
+    if (!user || rsvpList.includes(eventId)) return;
+    try {
+      // Write to Firestore subcollection events/{eventId}/rsvps/{userId}
+      await setDoc(doc(db, 'events', eventId, 'rsvps', user.uid), {
+        userId: user.uid,
+        username: profile?.username || 'Kreator',
+        createdAt: serverTimestamp(),
+      });
+      setRsvpList(prev => [...prev, eventId]);
+      setJustRsvpd(true);
+      // Award XP
+      if (profile) {
+        updateLocalProfile({ xp: profile.xp + 50 });
+      }
+      setTimeout(() => setJustRsvpd(false), 4000);
+    } catch (err) {
+      console.error('[Calendar] RSVP write failed:', err);
     }
-    
-    setTimeout(() => {
-      setJustRsvpd(false);
-    }, 4000);
   };
 
   useEffect(() => {
@@ -208,15 +239,36 @@ export default function Calendar() {
           <span>RASPORED</span>
           <span className="text-[#F5A500] font-marker font-normal tracking-normal mt-1">DOGAĐANJA</span>
         </h1>
-        {profile?.isAdmin && !selectedEvent && (
-          <button 
-            onClick={() => setShowAddModal(true)}
-            className="w-[48px] h-[48px] rounded-full bg-[#F5A500] text-[#0A0A0F] flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-[0_0_20px_rgba(245,165,0,0.6),0_0_40px_rgba(245,165,0,0.3)]"
-          >
-            <Plus className="w-[24px] h-[24px] font-black" strokeWidth={3} />
-          </button>
-        )}
       </div>
+
+      {/* ADMIN FAB — fixed top-right, only visible to admins, hidden when a sheet is open */}
+      {profile?.isAdmin && !selectedEvent && !showAddModal && (
+        <motion.button
+          id="admin-add-event-fab"
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0, opacity: 0 }}
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.92 }}
+          onClick={() => setShowAddModal(true)}
+          aria-label="Dodaj događaj (samo admin)"
+          className="fixed top-[72px] right-[16px] z-[60] w-[52px] h-[52px] rounded-full bg-[#F5A500] text-[#0A0A0F] flex items-center justify-center"
+          style={{
+            boxShadow: '0 0 0 2px rgba(245,165,0,0.25), 0 0 20px rgba(245,165,0,0.55), 0 4px 16px rgba(0,0,0,0.5)',
+          }}
+        >
+          {/* Plus icon */}
+          <Plus className="w-[22px] h-[22px]" strokeWidth={3} />
+
+          {/* Admin lock badge */}
+          <span
+            className="absolute -bottom-[4px] -right-[4px] w-[18px] h-[18px] rounded-full bg-[#0A0A0F] border border-[#F5A500]/60 flex items-center justify-center"
+            aria-hidden
+          >
+            <Lock className="w-[9px] h-[9px] text-[#F5A500]" strokeWidth={2.5} />
+          </span>
+        </motion.button>
+      )}
 
       {/* CALENDAR GRID */}
       <div className="px-[16px] mt-[24px]">

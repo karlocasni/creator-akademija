@@ -5,12 +5,7 @@ import BottomNav from './BottomNav';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
 
-// All possible Zajednica tabs
-const ALL_ZAJEDNICA_TABS = [
-  { label: 'Creator Hub', path: '/feed', adminOnly: false },
-  { label: 'XP Rang Lista', path: '/leaderboard', adminOnly: false },
-  { label: 'Kolege Kreatori', path: '/members', adminOnly: false },
-];
+
 
 // Routes where the Zajednica tab bar should be visible
 const ZAJEDNICA_PATHS = ['/feed', '/leaderboard', '/members'];
@@ -26,7 +21,7 @@ export default function AppShell({ children }: AppShellProps) {
 
       {/* Content */}
       <div className={cn(
-        'flex-1 pb-32'
+        'flex-1 pb-36'
       )}>
         <div className="max-w-[1000px] mx-auto px-4">
           <main className="min-w-0">{children}</main>

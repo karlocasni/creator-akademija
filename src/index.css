@@ -170,11 +170,14 @@
   box-shadow: 0 0 0 6px rgba(245,165,0,0.1), 0 8px 28px rgba(245,165,0,0.5);
 }
 .post-card {
-  border-left: 4px solid #F5A500 !important;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
   background: linear-gradient(180deg, rgba(255,255,255,0.02) 0%, transparent 60%), #111116;
+}
+
+.admin-post {
+  border: 1px solid rgba(245, 165, 0, 0.6) !important;
+  box-shadow: 0 0 25px rgba(245, 165, 0, 0.15), inset 0 0 15px rgba(245, 165, 0, 0.03) !important;
+  background: linear-gradient(180deg, rgba(245,165,0,0.08) 0%, transparent 60%), #111116 !important;
 }
 .lvl-badge {
   background: transparent !important;

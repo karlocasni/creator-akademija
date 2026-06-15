@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { X, Mail, Lock, User, ArrowRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { X, Mail, Lock, User, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { auth, db, functions } from '../../lib/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, updateProfile } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
@@ -12,6 +13,7 @@ interface AuthModalProps {
 }
 
 export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: AuthModalProps) {
+  const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(initialMode === 'login');
   
   // Update mode if initialMode changes while open or when opening
@@ -28,6 +30,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
   const [instagram, setInstagram] = useState('');
   const [tiktok, setTiktok] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   if (!isOpen) return null;
 
@@ -47,17 +50,21 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
         const user = userCredential.user;
         
         const isBypassed = user.email === 'ismael@akademija.com' ||
+                           user.email === 'brunovujcec6@gmail.com' ||
                            (user.email || '').toLowerCase().includes('admin') ||
                            (user.displayName || '').toLowerCase().includes('admin');
         
         // Provjeri je li email verificiran (osim ako nije admin ili mock korisnik)
         if (!user.emailVerified && !isBypassed) {
-          alert('Molimo potvrdite vašu email adresu. Poslan vam je link za verifikaciju.');
-          await sendEmailVerification(user);
+          alert('Molimo potvrdite vašu email adresu kako biste se prijavili.');
           await auth.signOut();
           setLoading(false);
           return;
         }
+
+        // Login succeeded — navigate to /feed BEFORE onClose so the URL is
+        // already correct when the auth-state re-render kicks in.
+        navigate('/feed', { replace: true });
       } else {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
@@ -92,6 +99,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
         await auth.signOut();
       }
       onClose();
+
     } catch (err: any) {
       let message = err.message;
       if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
@@ -220,26 +228,40 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
           <div className="relative">
             <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <input
-              type="password"
+              type={showPassword ? "text" : "password"}
               placeholder="Lozinka"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 focus:border-primary focus:outline-none transition-colors text-white"
+              className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-12 focus:border-primary focus:outline-none transition-colors text-white"
               required
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white transition-colors p-1"
+            >
+              {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            </button>
           </div>
 
           {!isLogin && (
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 placeholder="Potvrdi lozinku"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 focus:border-primary focus:outline-none transition-colors text-white"
+                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-12 focus:border-primary focus:outline-none transition-colors text-white"
                 required
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white transition-colors p-1"
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
             </div>
           )}
 

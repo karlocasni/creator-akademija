@@ -1,0 +1,205 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helpers ───────────────────────────────────────────────────────────────
+
+    function isAuthed() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isAuthed() && request.auth.uid == uid;
+    }
+
+    // Check admin flag from the caller's own profile document or email (server-side check)
+    function isAdmin() {
+      return isAuthed() && (
+        request.auth.token.email == 'brunovujcec6@gmail.com' ||
+        request.auth.token.email == 'ismael.hadzic17@gmail.com' ||
+        (exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.isAdmin == true)
+      );
+    }
+
+    function isCreator() {
+      return isAuthed() && (
+        exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.isCreator == true
+      );
+    }
+
+    // ─── profiles ──────────────────────────────────────────────────────────────
+
+    match /profiles/{userId} {
+      // Anyone authenticated can read any profile (leaderboard, members page, etc.)
+      allow read: if isAuthed();
+
+      // A user can create/update their own profile.
+      // They cannot self-grant isAdmin unless their email explicitly permits it.
+      allow create: if (isOwner(userId) &&
+        (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false) &&
+        (!('isCreator' in request.resource.data) || request.resource.data.isCreator == false) &&
+        (!('accessUntil' in request.resource.data))
+      ) || 
+      request.auth.token.email == 'brunovujcec6@gmail.com' || 
+      request.auth.token.email == 'ismael.hadzic17@gmail.com' || 
+      isAdmin() || isCreator();
+
+      allow update: if (isOwner(userId) &&
+        (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == resource.data.isAdmin) &&
+        (!('isCreator' in request.resource.data) || request.resource.data.isCreator == resource.data.isCreator) &&
+        (!('accessUntil' in request.resource.data) || request.resource.data.accessUntil == resource.data.accessUntil)
+      ) || 
+      request.auth.token.email == 'brunovujcec6@gmail.com' || 
+      request.auth.token.email == 'ismael.hadzic17@gmail.com' || 
+      isAdmin() || isCreator();
+
+      allow delete: if isAdmin();
+    }
+
+    // ─── posts ─────────────────────────────────────────────────────────────────
+
+    match /posts/{postId} {
+      allow read: if isAuthed();
+
+      // Any authenticated user can create a post
+      allow create: if isAuthed() &&
+        request.resource.data.authorId == request.auth.uid;
+
+      // Author or admin can update (e.g. pin, commentsCount increment)
+      allow update: if isAuthed() &&
+        (resource.data.authorId == request.auth.uid || isAdmin());
+
+      // Only post author or admin can delete
+      allow delete: if isAuthed() &&
+        (resource.data.authorId == request.auth.uid || isAdmin());
+
+      // ─── posts/{postId}/likes ──────────────────────────────────────────────
+
+      match /likes/{userId} {
+        // Any authenticated user can read likes (for like count / active state)
+        allow read: if isAuthed();
+        // A user can only write/delete their own like document
+        allow write: if isOwner(userId);
+      }
+
+      // ─── posts/{postId}/comments ──────────────────────────────────────────
+
+      match /comments/{commentId} {
+        allow read: if isAuthed();
+
+        // Any authenticated user can create a comment
+        allow create: if isAuthed() &&
+          request.resource.data.authorId == request.auth.uid;
+
+        // Comment author or admin can update/delete
+        allow update, delete: if isAuthed() &&
+          (resource.data.authorId == request.auth.uid || isAdmin() || isCreator());
+      }
+    }
+
+    // ─── events ────────────────────────────────────────────────────────────────
+
+    match /events/{eventId} {
+      allow read: if isAuthed();
+
+      // Admins and creators can create, update, or delete events
+      allow create, update, delete: if isAdmin() || isCreator();
+
+      // ─── events/{eventId}/rsvps ───────────────────────────────────────────
+
+      match /rsvps/{userId} {
+        allow read: if isAuthed();
+        // Users can create/delete their own RSVP
+        allow write: if isOwner(userId);
+      }
+    }
+
+    // ─── chats ─────────────────────────────────────────────────────────────────
+
+    match /chats/{chatId} {
+      allow read, write: if isAuthed() &&
+        request.auth.uid in resource.data.participants;
+
+      allow create: if isAuthed() &&
+        request.auth.uid in request.resource.data.participants;
+
+      match /messages/{messageId} {
+        allow read: if isAuthed() &&
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        allow create: if isAuthed() &&
+          request.resource.data.senderId == request.auth.uid;
+        allow update: if isAuthed() &&
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+      }
+    }
+
+    // ─── notifications ─────────────────────────────────────────────────────────
+
+    match /notifications/{notifId} {
+      // Only the recipient can read their own notifications
+      allow read: if isAuthed() && resource.data.recipientId == request.auth.uid;
+      // Notifications are created server-side or by other authenticated users
+      allow create: if isAuthed();
+      // Only recipient can mark as read
+      allow update: if isAuthed() && resource.data.recipientId == request.auth.uid;
+      allow delete: if isAuthed() && resource.data.recipientId == request.auth.uid;
+    }
+
+    // ─── challenges ────────────────────────────────────────────────────────────
+
+    match /challenges/{challengeId} {
+      allow read: if isAuthed();
+      allow write: if isAdmin();
+    }
+
+    // ─── challengeSubmissions ──────────────────────────────────────────────────
+
+    match /challengeSubmissions/{submissionId} {
+      allow read: if isAuthed();
+      // Allow any user to create a submission
+      allow create: if isAuthed() && request.resource.data.authorId == request.auth.uid;
+      // Allow users to update likes, or admins to pin
+      allow update: if isAuthed();
+      // Only admin or author can delete
+      allow delete: if isAuthed() && (resource.data.authorId == request.auth.uid || isAdmin());
+    }
+
+    // ─── courses ───────────────────────────────────────────────────────────────
+
+    match /courses/{courseId} {
+      allow read: if isAuthed();
+      allow write: if isAdmin() || isCreator();
+    }
+
+    // ─── hookVault ─────────────────────────────────────────────────────────────
+
+    match /hookVault/{hookId} {
+      allow read: if isAuthed();
+      allow create: if isAuthed() &&
+        request.resource.data.authorId == request.auth.uid;
+      allow update, delete: if isAuthed() &&
+        (resource.data.authorId == request.auth.uid || isAdmin());
+    }
+
+    // ─── videoIdeas ────────────────────────────────────────────────────────────
+
+    match /videoIdeas/{ideaId} {
+      allow read: if isAuthed() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthed() &&
+        request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthed() && resource.data.userId == request.auth.uid;
+    }
+
+    // ─── savedTrends ───────────────────────────────────────────────────────────
+
+    match /savedTrends/{trendId} {
+      allow read: if isAuthed() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthed() &&
+        request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthed() && resource.data.userId == request.auth.uid;
+    }
+  }
+}

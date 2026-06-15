@@ -1,19 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   MessageSquare,
   Share2,
   MoreHorizontal,
-  Flame,
+  Heart,
   MessageCircle,
   Pin,
 } from 'lucide-react';
 import {
   updateDoc,
   doc,
-  arrayUnion,
-  arrayRemove,
   getDoc,
   getDocs,
   collection,
@@ -22,6 +20,8 @@ import {
   setDoc,
   serverTimestamp,
   Timestamp,
+  deleteDoc,
+  onSnapshot,
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -84,6 +84,21 @@ export default function PostCard({ post }: PostCardProps) {
   const [showOptions, setShowOptions] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // Real-time likes from subcollection posts/{postId}/likes
+  const [likeCount, setLikeCount] = useState(0);
+  const [isLiked, setIsLiked] = useState(false);
+
+  useEffect(() => {
+    const likesRef = collection(doc(db, 'posts', post.id), 'likes');
+    const unsub = onSnapshot(likesRef, (snap) => {
+      setLikeCount(snap.size);
+      setIsLiked(!!user && snap.docs.some(d => d.id === user.uid));
+    }, (err) => {
+      console.warn('[PostCard] Likes snapshot error:', err);
+    });
+    return unsub;
+  }, [post.id, user?.uid]);
+
   const cachedProfile = getProfile(post.authorId);
   const currentAvatar = cachedProfile?.avatar_url || post.authorAvatar;
   const currentName = cachedProfile?.username || post.authorName;
@@ -139,7 +154,7 @@ export default function PostCard({ post }: PostCardProps) {
     if (!window.confirm('Jesi li siguran da želiš obrisati ovu objavu?')) return;
     setDeleting(true);
     try {
-      await updateDoc(doc(db, 'posts', post.id), { status: 'deleted' });
+      await deleteDoc(doc(db, 'posts', post.id));
     } catch (err) {
       console.error('Delete failed:', err);
       alert('Greška pri brisanju.');
@@ -167,36 +182,36 @@ export default function PostCard({ post }: PostCardProps) {
     await updateDoc(doc(db, 'posts', post.id), { pinned: true });
   };
 
-  const likes: string[] = Array.isArray(post.likes) ? post.likes : [];
-  const isLiked = likes.includes(user?.uid ?? '');
-
   const toggleLike = async () => {
     if (!user || likeLoading) return;
     setLikeLoading(true);
+    const likeRef = doc(db, 'posts', post.id, 'likes', user.uid);
     const adding = !isLiked;
     try {
-      await updateDoc(doc(db, 'posts', post.id), {
-        likes: adding ? arrayUnion(user.uid) : arrayRemove(user.uid),
-      });
-      if (adding && user.uid !== post.authorId) {
-        try {
-          const authorSnap = await getDoc(doc(db, 'profiles', post.authorId));
-          if (authorSnap.exists()) {
-            const authorXP = (authorSnap.data() as UserProfile).xp ?? 0;
-            await awardXP(post.authorId, 5, authorXP);
+      if (adding) {
+        await setDoc(likeRef, { userId: user.uid, createdAt: serverTimestamp() });
+        if (user.uid !== post.authorId) {
+          try {
+            const authorSnap = await getDoc(doc(db, 'profiles', post.authorId));
+            if (authorSnap.exists()) {
+              const authorXP = (authorSnap.data() as UserProfile).xp ?? 0;
+              await awardXP(post.authorId, 5, authorXP);
+            }
+          } catch (xpErr) {
+            console.warn('Failed to award XP for like:', xpErr);
           }
-        } catch (xpErr) {
-          console.warn('Failed to award XP for like:', xpErr);
+          createNotification({
+            recipientId: post.authorId,
+            senderId: user.uid,
+            senderName: profile?.username || 'Projekt90 Član',
+            senderAvatar: profile?.avatar_url || dicebearUrl,
+            type: 'like',
+            message: `${profile?.username || 'Projekt90 Član'} je reagirao na tvoju objavu`,
+            postId: post.id,
+          }).catch((err) => console.warn('Like notification failed:', err));
         }
-        createNotification({
-          recipientId: post.authorId,
-          senderId: user.uid,
-          senderName: profile?.username || 'Projekt90 Član',
-          senderAvatar: profile?.avatar_url || dicebearUrl,
-          type: 'like',
-          message: `${profile?.username || 'Projekt90 Član'} je reagirao na tvoju objavu`,
-          postId: post.id,
-        }).catch((err) => console.warn('Like notification failed:', err));
+      } else {
+        await deleteDoc(likeRef);
       }
     } catch (err) {
       console.error('Failed to toggle like:', err);
@@ -211,7 +226,8 @@ export default function PostCard({ post }: PostCardProps) {
     <article
       className={cn(
         'bg-[#111116] border border-[rgba(255,255,255,0.06)] rounded-[20px] overflow-hidden post-card flex flex-col',
-        deleting && 'opacity-50 grayscale pointer-events-none'
+        deleting && 'opacity-50 grayscale pointer-events-none',
+        cachedProfile?.isAdmin && 'admin-post'
       )}
     >
       <div className="p-4">
@@ -355,8 +371,8 @@ export default function PostCard({ post }: PostCardProps) {
               isLiked ? 'text-[#F5A500]' : 'text-[#8B8FA8] hover:text-[#F5A500]'
             )}
           >
-            <span className="text-sm">🔥</span>
-            <span className="font-mono text-[12px]">{likes.length}</span>
+            <Heart className={cn("w-4 h-4 transition-transform duration-200", isLiked && "fill-current scale-110")} />
+            <span className="font-mono text-[12px]">{likeCount}</span>
           </button>
 
           <button

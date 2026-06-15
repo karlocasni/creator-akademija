@@ -6,13 +6,14 @@ export default function CommunityTabs() {
   const location = useLocation();
   const { profile } = useAuth();
   const isAdmin = profile?.isAdmin === true;
+  const isCreator = profile?.isCreator === true;
 
   const tabs = [
     { label: 'Creator Hub', path: '/feed' }
   ];
 
-  if (isAdmin) {
-    tabs.push({ label: 'Kolege Kreatori', path: '/members' });
+  if (isAdmin || isCreator) {
+    tabs.push({ label: 'Članovi', path: '/members' });
   }
 
   return (

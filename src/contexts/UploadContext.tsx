@@ -122,7 +122,6 @@ export function UploadProvider({ children }: { children: ReactNode }) {
         content: content.trim(),
         imageUrl,
         videoUrl,
-        likes: [],
         commentsCount: 0,
         createdAt: serverTimestamp(),
       };
