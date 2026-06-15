@@ -51,11 +51,23 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
         
         const isBypassed = user.email === 'ismael@akademija.com' ||
                            user.email === 'brunovujcec6@gmail.com' ||
+                           user.email === 'ismael.hadzic17@gmail.com' ||
                            (user.email || '').toLowerCase().includes('admin') ||
                            (user.displayName || '').toLowerCase().includes('admin');
         
-        // Provjeri je li email verificiran (osim ako nije admin ili mock korisnik)
-        if (!user.emailVerified && !isBypassed) {
+        let isProfileActive = false;
+        try {
+          const { getDoc, doc } = await import('firebase/firestore');
+          const profileSnap = await getDoc(doc(db, 'profiles', user.uid));
+          if (profileSnap.exists()) {
+            isProfileActive = profileSnap.data().status === 'active';
+          }
+        } catch (e) {
+          console.error("Error fetching profile during login", e);
+        }
+        
+        // Provjeri je li email verificiran (osim ako nije admin, mock korisnik, ili korisnik kreiran od strane admina)
+        if (!user.emailVerified && !isBypassed && !isProfileActive) {
           alert('Molimo potvrdite vašu email adresu kako biste se prijavili.');
           await auth.signOut();
           setLoading(false);
