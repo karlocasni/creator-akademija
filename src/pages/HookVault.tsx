@@ -65,8 +65,14 @@ export default function HookVault() {
   useEffect(() => {
     const q = query(collection(db, 'hookVault'));
     const unsub = onSnapshot(q, snap => {
-      const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as HookItem));
-      setHooks(items);
+      if (snap.empty) {
+        import('../lib/firebase-mock').then(({ SEED_HOOK_VAULT }) => {
+          setHooks(SEED_HOOK_VAULT as any[]);
+        });
+      } else {
+        const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as HookItem));
+        setHooks(items);
+      }
     });
     return unsub;
   }, []);
@@ -150,7 +156,7 @@ export default function HookVault() {
         </div>
         <button
           onClick={() => setShowForm(v => !v)}
-          className="flex items-center gap-2 px-4 py-2 bg-[#F5A500] text-[#0A0A0F] rounded-full font-heading font-[800] text-[12px] uppercase tracking-widest hover:scale-[1.03] active:scale-[0.98] transition-transform shrink-0"
+          className="flex items-center gap-2 px-4 py-2 bg-[#3B82F6] text-white rounded-full font-heading font-[800] text-[12px] uppercase tracking-widest hover:scale-[1.03] active:scale-[0.98] transition-transform shrink-0"
         >
           <Plus className="w-4 h-4" />
           Dodaj Hook
@@ -168,7 +174,7 @@ export default function HookVault() {
 
         {/* ADD HOOK FORM */}
         {showForm && (
-          <div className="bg-[#111116] rounded-[24px] border border-[rgba(245,165,0,0.2)] p-[20px] flex flex-col gap-4">
+          <div className="bg-[#151E30] rounded-[24px] border border-[rgba(59,130,246,0.2)] p-[20px] flex flex-col gap-4">
             <div className="flex items-center justify-between mb-1">
               <h2 className="font-heading font-[800] text-[15px] text-white uppercase">Dodaj Hook (+15 XP)</h2>
               <button onClick={() => setShowForm(false)} className="text-[#8B8FA8] hover:text-white">
@@ -183,7 +189,7 @@ export default function HookVault() {
                 onChange={e => setHookText(e.target.value)}
                 placeholder="Napiši hook koji hvata pažnju u prve 3 sekunde..."
                 rows={3}
-                className="w-full bg-[#0A0A0F] border border-[rgba(255,255,255,0.08)] rounded-[14px] py-3 px-4 text-[14px] text-white placeholder:text-[#4A4A5A] focus:border-[#F5A500] focus:outline-none transition-colors resize-none"
+                className="w-full bg-[#0E1420] border border-[rgba(255,255,255,0.08)] rounded-[14px] py-3 px-4 text-[14px] text-white placeholder:text-[#4A4A5A] focus:border-[#3B82F6] focus:outline-none transition-colors resize-none"
               />
             </div>
 
@@ -192,8 +198,8 @@ export default function HookVault() {
                 <label className="text-[11px] font-mono uppercase tracking-widest text-[#8B8FA8] block mb-2">Kategorija</label>
                 <div className="relative">
                   <select value={kategorija} onChange={e => setKategorija(e.target.value)}
-                    className="w-full bg-[#0A0A0F] border border-[rgba(255,255,255,0.08)] rounded-[14px] py-3 px-4 text-[13px] text-white appearance-none focus:border-[#F5A500] focus:outline-none">
-                    {KATEGORIJE.map(k => <option key={k} value={k} className="bg-[#0A0A0F]">{k}</option>)}
+                    className="w-full bg-[#0E1420] border border-[rgba(255,255,255,0.08)] rounded-[14px] py-3 px-4 text-[13px] text-white appearance-none focus:border-[#3B82F6] focus:outline-none">
+                    {KATEGORIJE.map(k => <option key={k} value={k} className="bg-[#0E1420]">{k}</option>)}
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#8B8FA8] pointer-events-none" />
                 </div>
@@ -202,8 +208,8 @@ export default function HookVault() {
                 <label className="text-[11px] font-mono uppercase tracking-widest text-[#8B8FA8] block mb-2">Niša</label>
                 <div className="relative">
                   <select value={nisa} onChange={e => setNisa(e.target.value)}
-                    className="w-full bg-[#0A0A0F] border border-[rgba(255,255,255,0.08)] rounded-[14px] py-3 px-4 text-[13px] text-white appearance-none focus:border-[#F5A500] focus:outline-none">
-                    {NIŠE.map(n => <option key={n} value={n} className="bg-[#0A0A0F]">{n}</option>)}
+                    className="w-full bg-[#0E1420] border border-[rgba(255,255,255,0.08)] rounded-[14px] py-3 px-4 text-[13px] text-white appearance-none focus:border-[#3B82F6] focus:outline-none">
+                    {NIŠE.map(n => <option key={n} value={n} className="bg-[#0E1420]">{n}</option>)}
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#8B8FA8] pointer-events-none" />
                 </div>
@@ -216,14 +222,14 @@ export default function HookVault() {
                 value={zastoRadi}
                 onChange={e => setZastoRadi(e.target.value)}
                 placeholder="Kratko objasni psihologiju iza hooka..."
-                className="w-full bg-[#0A0A0F] border border-[rgba(255,255,255,0.08)] rounded-[14px] py-3 px-4 text-[14px] text-white placeholder:text-[#4A4A5A] focus:border-[#F5A500] focus:outline-none transition-colors"
+                className="w-full bg-[#0E1420] border border-[rgba(255,255,255,0.08)] rounded-[14px] py-3 px-4 text-[14px] text-white placeholder:text-[#4A4A5A] focus:border-[#3B82F6] focus:outline-none transition-colors"
               />
             </div>
 
             <button
               onClick={handleAddHook}
               disabled={!hookText.trim() || submitting}
-              className="w-full py-3 bg-[#F5A500] text-[#0A0A0F] font-heading font-[800] text-[14px] rounded-full uppercase hover:scale-[1.02] active:scale-[0.98] transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-3 bg-[#3B82F6] text-white font-heading font-[800] text-[14px] rounded-full uppercase hover:scale-[1.02] active:scale-[0.98] transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {submitting ? 'DODAJEM...' : 'OBJAVI HOOK'}
             </button>
@@ -238,7 +244,7 @@ export default function HookVault() {
               onClick={() => setFilter(f as FilterType)}
               className={`px-4 py-2 rounded-full text-[12px] font-bold whitespace-nowrap transition-colors ${
                 filter === f
-                  ? 'bg-white text-[#0A0A0F]'
+                  ? 'bg-white text-[#0E1420]'
                   : 'bg-[rgba(255,255,255,0.05)] text-[#8B8FA8] hover:bg-[rgba(255,255,255,0.1)]'
               }`}
             >
@@ -252,13 +258,13 @@ export default function HookVault() {
           <span className="text-[11px] font-mono text-[#4A4A5A] uppercase tracking-widest">Sortiraj:</span>
           <button
             onClick={() => setSort('liked')}
-            className={`px-3 py-1.5 rounded-full text-[11px] font-bold transition-colors ${sort === 'liked' ? 'bg-[#F5A500]/20 text-[#F5A500]' : 'text-[#8B8FA8] hover:text-white'}`}
+            className={`px-3 py-1.5 rounded-full text-[11px] font-bold transition-colors ${sort === 'liked' ? 'bg-[#3B82F6]/20 text-[#3B82F6]' : 'text-[#8B8FA8] hover:text-white'}`}
           >
             Najpopularniji
           </button>
           <button
             onClick={() => setSort('newest')}
-            className={`px-3 py-1.5 rounded-full text-[11px] font-bold transition-colors ${sort === 'newest' ? 'bg-[#F5A500]/20 text-[#F5A500]' : 'text-[#8B8FA8] hover:text-white'}`}
+            className={`px-3 py-1.5 rounded-full text-[11px] font-bold transition-colors ${sort === 'newest' ? 'bg-[#3B82F6]/20 text-[#3B82F6]' : 'text-[#8B8FA8] hover:text-white'}`}
           >
             Najnoviji
           </button>
@@ -266,7 +272,7 @@ export default function HookVault() {
 
         {/* HOOKS LIST */}
         {filtered.length === 0 ? (
-          <div className="bg-[#111116] rounded-[24px] border border-[rgba(255,255,255,0.06)] p-10 text-center">
+          <div className="bg-[#151E30] rounded-[24px] border border-[rgba(255,255,255,0.06)] p-10 text-center">
             <Archive className="w-10 h-10 text-[#4A4A5A] mx-auto mb-3" />
             <p className="text-[#8B8FA8] text-[14px]">Još nema hookova u ovoj kategoriji.</p>
             <p className="text-[#4A4A5A] text-[12px] mt-1">Budi prvi koji dodaje!</p>
@@ -279,7 +285,7 @@ export default function HookVault() {
               return (
                 <div
                   key={hook.id}
-                  className="bg-[#111116] rounded-[20px] border border-[rgba(255,255,255,0.06)] p-5 flex flex-col gap-3"
+                  className="bg-[#151E30] rounded-[20px] border border-[rgba(255,255,255,0.06)] p-5 flex flex-col gap-3"
                 >
                   {/* Hook text */}
                   <p className="font-heading font-[700] text-[17px] text-white leading-snug">

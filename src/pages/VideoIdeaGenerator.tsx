@@ -177,7 +177,7 @@ export default function VideoIdeaGenerator() {
       onClick={onClick}
       className={`px-4 py-2 rounded-full text-[13px] font-bold whitespace-nowrap transition-all ${
         active
-          ? 'bg-[#F5A500] text-[#0A0A0F]'
+          ? 'bg-[#3B82F6] text-white'
           : 'bg-[rgba(255,255,255,0.05)] text-[#8B8FA8] hover:bg-[rgba(255,255,255,0.1)] hover:text-white'
       }`}
     >
@@ -201,14 +201,14 @@ export default function VideoIdeaGenerator() {
           </h1>
           <p className="font-sans text-[13px] text-[#8B8FA8]">AI generator kompletnih video ideja</p>
         </div>
-        <div className="ml-auto bg-[#F5A500]/10 text-[#F5A500] px-3 py-1.5 rounded-full font-heading font-[800] text-[10px] tracking-widest uppercase flex items-center gap-1 shrink-0">
+        <div className="ml-auto bg-[#3B82F6]/10 text-[#3B82F6] px-3 py-1.5 rounded-full font-heading font-[800] text-[10px] tracking-widest uppercase flex items-center gap-1 shrink-0">
           <Sparkles className="w-3 h-3" /> +30 XP
         </div>
       </div>
 
       <div className="px-[16px] flex flex-col gap-5">
         {/* FORM CARD */}
-        <div className="bg-[#111116] rounded-[24px] border border-[rgba(255,255,255,0.06)] p-[20px] flex flex-col gap-5">
+        <div className="bg-[#151E30] rounded-[24px] border border-[rgba(255,255,255,0.06)] p-[20px] flex flex-col gap-5">
 
           {/* Niša */}
           <div>
@@ -217,9 +217,9 @@ export default function VideoIdeaGenerator() {
               <select
                 value={nisa}
                 onChange={e => setNisa(e.target.value)}
-                className="w-full bg-[#0A0A0F] border border-[rgba(255,255,255,0.08)] rounded-[14px] py-3 px-4 text-[14px] text-white appearance-none focus:border-[#F5A500] focus:outline-none transition-colors"
+                className="w-full bg-[#0E1420] border border-[rgba(255,255,255,0.08)] rounded-[14px] py-3 px-4 text-[14px] text-white appearance-none focus:border-[#3B82F6] focus:outline-none transition-colors"
               >
-                {NIŠE.map(n => <option key={n} value={n} className="bg-[#0A0A0F]">{n}</option>)}
+                {NIŠE.map(n => <option key={n} value={n} className="bg-[#0E1420]">{n}</option>)}
               </select>
               <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8B8FA8] pointer-events-none" />
             </div>
@@ -232,7 +232,7 @@ export default function VideoIdeaGenerator() {
               value={tema}
               onChange={e => setTema(e.target.value)}
               placeholder="npr. jutarnja rutina..."
-              className="w-full bg-[#0A0A0F] border border-[rgba(255,255,255,0.08)] rounded-[14px] py-3 px-4 text-[14px] text-white placeholder:text-[#4A4A5A] focus:border-[#F5A500] focus:outline-none transition-colors"
+              className="w-full bg-[#0E1420] border border-[rgba(255,255,255,0.08)] rounded-[14px] py-3 px-4 text-[14px] text-white placeholder:text-[#4A4A5A] focus:border-[#3B82F6] focus:outline-none transition-colors"
             />
           </div>
 
@@ -243,7 +243,7 @@ export default function VideoIdeaGenerator() {
               value={publika}
               onChange={e => setPublika(e.target.value)}
               placeholder="npr. studenti 18-25..."
-              className="w-full bg-[#0A0A0F] border border-[rgba(255,255,255,0.08)] rounded-[14px] py-3 px-4 text-[14px] text-white placeholder:text-[#4A4A5A] focus:border-[#F5A500] focus:outline-none transition-colors"
+              className="w-full bg-[#0E1420] border border-[rgba(255,255,255,0.08)] rounded-[14px] py-3 px-4 text-[14px] text-white placeholder:text-[#4A4A5A] focus:border-[#3B82F6] focus:outline-none transition-colors"
             />
           </div>
 
@@ -267,7 +267,7 @@ export default function VideoIdeaGenerator() {
           <button
             onClick={handleGenerate}
             disabled={isGenerating}
-            className="w-full py-4 bg-[#F5A500] text-[#0A0A0F] font-heading font-[800] text-[15px] rounded-full uppercase hover:scale-[1.02] active:scale-[0.98] transition-transform flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full py-4 bg-[#3B82F6] text-white font-heading font-[800] text-[15px] rounded-full uppercase hover:scale-[1.02] active:scale-[0.98] transition-transform flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {isGenerating ? (
               <>
@@ -291,8 +291,8 @@ export default function VideoIdeaGenerator() {
 
         {/* RESULT CARD */}
         {result && !isGenerating && (
-          <div className="bg-[#111116] rounded-[24px] border border-[rgba(245,165,0,0.2)] p-[20px] flex flex-col gap-5"
-            style={{ boxShadow: '0 0 30px rgba(245,165,0,0.05)' }}>
+          <div className="bg-[#151E30] rounded-[24px] border border-[rgba(59,130,246,0.2)] p-[20px] flex flex-col gap-5"
+            style={{ boxShadow: '0 0 30px rgba(59,130,246,0.05)' }}>
 
             {/* Header */}
             <div className="flex items-center justify-between">
@@ -310,7 +310,7 @@ export default function VideoIdeaGenerator() {
                   disabled={saved}
                   className={`flex items-center gap-2 px-4 py-2 rounded-full text-[12px] font-bold transition-colors ${
                     saved
-                      ? 'bg-[#F5A500]/20 text-[#F5A500] cursor-default'
+                      ? 'bg-[#3B82F6]/20 text-[#3B82F6] cursor-default'
                       : 'bg-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.1)] text-white'
                   }`}
                 >
@@ -321,16 +321,16 @@ export default function VideoIdeaGenerator() {
             </div>
 
             {/* Hook */}
-            <ResultSection label="HOOK" color="#F5A500">
+            <ResultSection label="HOOK" color="#3B82F6">
               <p className="font-heading font-[700] text-[17px] text-white leading-snug">"{result.hook}"</p>
             </ResultSection>
 
             {/* Struktura */}
-            <ResultSection label="STRUKTURA" color="#F5A500">
+            <ResultSection label="STRUKTURA" color="#3B82F6">
               <ol className="flex flex-col gap-2">
                 {result.struktura.map((item, i) => (
                   <li key={i} className="flex gap-3 items-start">
-                    <span className="font-mono text-[#F5A500] font-bold text-[12px] mt-0.5 shrink-0">{i + 1}.</span>
+                    <span className="font-mono text-[#3B82F6] font-bold text-[12px] mt-0.5 shrink-0">{i + 1}.</span>
                     <span className="font-sans text-[14px] text-white/85 leading-snug">{item}</span>
                   </li>
                 ))}
@@ -338,15 +338,15 @@ export default function VideoIdeaGenerator() {
             </ResultSection>
 
             {/* Caption */}
-            <ResultSection label="CAPTION" color="#F5A500">
+            <ResultSection label="CAPTION" color="#3B82F6">
               <p className="font-sans text-[14px] text-white/85 leading-relaxed whitespace-pre-line">{result.caption}</p>
             </ResultSection>
 
             {/* Hashtagi */}
-            <ResultSection label="HASHTAGI" color="#F5A500">
+            <ResultSection label="HASHTAGI" color="#3B82F6">
               <div className="flex flex-wrap gap-2">
                 {result.hashtagi.map((h, i) => (
-                  <span key={i} className="px-3 py-1 bg-[#F5A500]/10 text-[#F5A500] rounded-full font-mono text-[12px] font-bold">
+                  <span key={i} className="px-3 py-1 bg-[#3B82F6]/10 text-[#3B82F6] rounded-full font-mono text-[12px] font-bold">
                     {h}
                   </span>
                 ))}

@@ -51,8 +51,14 @@ export default function Lectures() {
   useEffect(() => {
     const q = query(collection(db, 'courses'), orderBy('daysToUnlock', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const dbLectures = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lecture));
-      setLectures(dbLectures);
+      if (snapshot.empty) {
+        import('../lib/firebase-mock').then(({ SEED_COURSES }) => {
+          setLectures(SEED_COURSES as any[]);
+        });
+      } else {
+        const dbLectures = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lecture));
+        setLectures(dbLectures);
+      }
     }, (err) => {
       console.warn('[Lectures] Courses fetch error, using mock fallback:', err);
       import('../lib/firebase-mock').then(({ SEED_COURSES }) => {
@@ -269,7 +275,7 @@ export default function Lectures() {
       <div className="p-4 md:p-10 max-w-5xl mx-auto">
         <button
           onClick={() => setSelectedLecture(null)}
-          className="mb-6 text-sm font-bold text-[#F5A500] hover:text-[#ffb31a] flex items-center gap-1 transition-colors"
+          className="mb-6 text-sm font-bold text-[#3B82F6] hover:text-[#2563EB] flex items-center gap-1 transition-colors"
         >
           <ChevronRight className="w-4 h-4 rotate-180" /> NATRAG
         </button>
@@ -339,11 +345,11 @@ export default function Lectures() {
               
               if (mySub && !isEditingSubmission) {
                 return (
-                  <div className="bg-[#111116] border border-white/5 p-6 rounded-3xl space-y-4 hover:border-white/10 transition-colors">
+                  <div className="bg-[#151E30] border border-white/5 p-6 rounded-3xl space-y-4 hover:border-white/10 transition-colors">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div className="flex items-center gap-3">
                         <span className={`text-[10px] font-mono font-bold uppercase tracking-widest px-3 py-1 rounded-full ${
-                          mySub.status === 'pending' ? 'bg-[#F5A500]/20 text-[#F5A500]' : 'bg-emerald-500/20 text-emerald-400'
+                          mySub.status === 'pending' ? 'bg-[#3B82F6]/20 text-[#3B82F6]' : 'bg-emerald-500/20 text-emerald-400'
                         }`}>
                           {mySub.status === 'pending' ? 'Na čekanju' : 'Ocijenjeno'}
                         </span>
@@ -359,7 +365,7 @@ export default function Lectures() {
                             setSubmissionNotes(mySub.description || '');
                             setIsEditingSubmission(true);
                           }}
-                          className="text-xs font-bold text-[#F5A500] hover:underline flex items-center gap-1"
+                          className="text-xs font-bold text-[#3B82F6] hover:underline flex items-center gap-1"
                         >
                           <span className="material-symbols-outlined text-sm">edit</span> Uredi predaju
                         </button>
@@ -389,9 +395,9 @@ export default function Lectures() {
 
                     {mySub.status === 'graded' && (
                       <div className="mt-6 border-t border-white/5 pt-6 grid grid-cols-1 md:grid-cols-4 gap-6">
-                        <div className="md:col-span-1 flex flex-col items-center justify-center bg-[#F5A500]/10 border border-[#F5A500]/30 rounded-2xl p-4">
+                        <div className="md:col-span-1 flex flex-col items-center justify-center bg-[#3B82F6]/10 border border-[#3B82F6]/30 rounded-2xl p-4">
                           <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest leading-none">Ocjena</span>
-                          <span className="text-5xl font-black text-[#F5A500] mt-2">{mySub.grade}</span>
+                          <span className="text-5xl font-black text-[#3B82F6] mt-2">{mySub.grade}</span>
                           <span className="text-xs text-[#8B8FA8] mt-1">od 5</span>
                         </div>
                         <div className="md:col-span-3 space-y-3">
@@ -410,7 +416,7 @@ export default function Lectures() {
 
               // Submission Form
               return (
-                <div className="bg-[#111116] border border-white/5 p-6 md:p-8 rounded-3xl space-y-6">
+                <div className="bg-[#151E30] border border-white/5 p-6 md:p-8 rounded-3xl space-y-6">
                   <h3 className="text-lg font-bold text-white uppercase flex items-center gap-2">
                     <span className="material-symbols-outlined text-primary">cloud_upload</span> 
                     {isEditingSubmission ? 'Uredi svoj video uradak' : 'Predaj novi video uradak'}
@@ -537,11 +543,11 @@ export default function Lectures() {
                 <div className="space-y-6">
                   {/* Stats Bar */}
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-[#111116] border border-white/5 p-4 rounded-2xl text-center">
-                      <span className="text-2xl font-black text-[#F5A500]">{pendingSubs.length}</span>
+                    <div className="bg-[#151E30] border border-white/5 p-4 rounded-2xl text-center">
+                      <span className="text-2xl font-black text-[#3B82F6]">{pendingSubs.length}</span>
                       <span className="block text-[10px] text-muted-foreground uppercase font-black tracking-wider mt-1">Na Čekanju</span>
                     </div>
-                    <div className="bg-[#111116] border border-white/5 p-4 rounded-2xl text-center">
+                    <div className="bg-[#151E30] border border-white/5 p-4 rounded-2xl text-center">
                       <span className="text-2xl font-black text-emerald-400">{gradedSubs.length}</span>
                       <span className="block text-[10px] text-muted-foreground uppercase font-black tracking-wider mt-1">Ocijenjeno</span>
                     </div>
@@ -550,7 +556,7 @@ export default function Lectures() {
                   {/* Pending Submissions */}
                   <div className="space-y-4">
                     <h3 className="text-sm font-black text-white uppercase tracking-wider border-b border-white/5 pb-2 flex items-center gap-2">
-                      <span className="material-symbols-outlined text-sm text-[#F5A500]">pending_actions</span>
+                      <span className="material-symbols-outlined text-sm text-[#3B82F6]">pending_actions</span>
                       Predaje na čekanju ({pendingSubs.length})
                     </h3>
                     
@@ -558,7 +564,7 @@ export default function Lectures() {
                       <p className="text-xs text-muted-foreground italic pl-2">Nema novih predaja za ovaj seminar.</p>
                     ) : (
                       pendingSubs.map((sub) => (
-                        <div key={sub.id} className="bg-[#111116] border border-white/5 p-5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div key={sub.id} className="bg-[#151E30] border border-white/5 p-5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
                           <div className="space-y-2 text-left">
                             <div className="flex items-center gap-2">
                               <img src={sub.userAvatar} alt={sub.username} className="w-6 h-6 rounded-full" />
@@ -606,7 +612,7 @@ export default function Lectures() {
                       <p className="text-xs text-muted-foreground italic pl-2">Još nema ocijenjenih predaja za ovaj seminar.</p>
                     ) : (
                       gradedSubs.map((sub) => (
-                        <div key={sub.id} className="bg-[#111116] border border-white/5 p-5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div key={sub.id} className="bg-[#151E30] border border-white/5 p-5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
                           <div className="space-y-2 text-left">
                             <div className="flex items-center gap-2">
                               <img src={sub.userAvatar} alt={sub.username} className="w-6 h-6 rounded-full" />
@@ -658,7 +664,7 @@ export default function Lectures() {
         {selectedSubmissionForGrading && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
             <div className="absolute inset-0 bg-background/80 backdrop-blur-xl" onClick={() => setSelectedSubmissionForGrading(null)} />
-            <div className="relative w-full max-w-md bg-[#111116] border border-white/5 p-8 rounded-[2.5rem] shadow-2xl overflow-y-auto max-h-[90vh] text-left">
+            <div className="relative w-full max-w-md bg-[#151E30] border border-white/5 p-8 rounded-[2.5rem] shadow-2xl overflow-y-auto max-h-[90vh] text-left">
               <button 
                 type="button"
                 onClick={() => setSelectedSubmissionForGrading(null)}
@@ -734,7 +740,7 @@ export default function Lectures() {
       <div className="pt-[24px] px-[16px] flex flex-col">
         <h1 className="font-heading font-[800] text-[28px] text-[#FFFFFF] leading-[1.1] mb-[4px] uppercase flex items-center gap-2">
           <span>CREATOR</span>
-          <span className="text-[#F5A500] font-marker font-normal tracking-normal mt-1">AKADEMIJA</span>
+          <span className="text-[#3B82F6] font-marker font-normal tracking-normal mt-1">AKADEMIJA</span>
         </h1>
         <p className="font-sans font-[400] text-[14px] text-[#8B8FA8]">
           Nauči kako postati prepoznatljiv brend i gospodariti algoritmima.
@@ -748,7 +754,7 @@ export default function Lectures() {
                 setNewCourse({});
                 setShowAddModal(true);
               }}
-              className="flex items-center gap-[8px] px-[16px] py-[8px] bg-[#F5A500] text-[#0A0A0F] rounded-full font-heading font-[700] text-[12px] hover:scale-105 transition-transform"
+              className="flex items-center gap-[8px] px-[16px] py-[8px] bg-[#3B82F6] text-white rounded-full font-heading font-[700] text-[12px] hover:scale-105 transition-transform"
             >
               <Plus className="w-[14px] h-[14px]" />
               Dodaj Lekciju
@@ -774,7 +780,7 @@ export default function Lectures() {
             className={cn(
               "px-[18px] py-[8px] rounded-full font-sans font-[600] text-[13px] border-[1.5px] cursor-pointer whitespace-nowrap transition-colors",
               selectedCategory === cat
-                ? "bg-[rgba(245,165,0,0.12)] border-[#F5A500] text-[#F5A500]"
+                ? "bg-[rgba(59,130,246,0.12)] border-[#3B82F6] text-[#3B82F6]"
                 : "bg-transparent border-[rgba(255,255,255,0.06)] text-[#8B8FA8]"
             )}
           >
@@ -802,7 +808,7 @@ export default function Lectures() {
                   setNewCourse(featuredCourse);
                   setShowAddModal(true);
                 }}
-                className="bg-[#0A0A0F]/60 backdrop-blur-md text-[#FFFFFF] text-[10px] font-heading font-[800] px-[12px] py-[6px] rounded-full hover:bg-[#F5A500] hover:text-[#0A0A0F] transition-colors uppercase"
+                className="bg-[#0E1420]/60 backdrop-blur-md text-[#FFFFFF] text-[10px] font-heading font-[800] px-[12px] py-[6px] rounded-full hover:bg-[#3B82F6] hover:text-white transition-colors uppercase"
               >
                 Uredi
               </button>
@@ -823,25 +829,25 @@ export default function Lectures() {
             className={cn("w-full h-[180px] object-cover transition-transform duration-700 group-hover:scale-105", isLocked(featuredCourse.daysToUnlock) && "opacity-60 grayscale")} 
             alt={featuredCourse.title} 
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[rgba(10,10,15,0.3)] to-[rgba(10,10,15,0.95)]" />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[rgba(14,20,32,0.3)] to-[rgba(14,20,32,0.95)]" />
           
           {isLocked(featuredCourse.daysToUnlock) ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
               <Lock className="w-[40px] h-[40px] mb-[12px] text-[#FFFFFF]/50" />
-              <span className="text-[12px] font-sans font-[700] uppercase bg-[#0A0A0F]/50 text-[#FFFFFF]/80 px-[16px] py-[6px] rounded-full backdrop-blur-md">
+              <span className="text-[12px] font-sans font-[700] uppercase bg-[#0E1420]/50 text-[#FFFFFF]/80 px-[16px] py-[6px] rounded-full backdrop-blur-md">
                 {getTimeRemaining(featuredCourse.daysToUnlock)}
               </span>
             </div>
           ) : (
-            <div className="absolute inset-0 bg-[#F5A500]/0 group-hover:bg-[#F5A500]/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 z-10">
-              <div className="w-[64px] h-[64px] bg-[#F5A500] rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(245,165,0,0.5)] transform scale-50 group-hover:scale-100 transition-transform duration-300">
-                <Play className="w-[32px] h-[32px] text-[#0A0A0F] fill-current ml-[4px]" />
+            <div className="absolute inset-0 bg-[#3B82F6]/0 group-hover:bg-[#3B82F6]/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 z-10">
+              <div className="w-[64px] h-[64px] bg-[#3B82F6] rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,0.5)] transform scale-50 group-hover:scale-100 transition-transform duration-300">
+                <Play className="w-[32px] h-[32px] text-white fill-current ml-[4px]" />
               </div>
             </div>
           )}
 
           <div className="absolute bottom-0 w-full p-[16px] flex flex-col items-start z-10">
-            <span className="tag-category mb-[8px] bg-[rgba(245,165,0,0.12)] text-[#F5A500]">{featuredCourse.category}</span>
+            <span className="tag-category mb-[8px] bg-[rgba(59,130,246,0.12)] text-[#3B82F6]">{featuredCourse.category}</span>
             <h2 className="font-heading font-[700] text-[24px] text-[#FFFFFF] leading-tight line-clamp-2">
               {featuredCourse.title}
             </h2>
@@ -864,8 +870,8 @@ export default function Lectures() {
                 if (!locked) setSelectedLecture(l);
               }}
               className={cn(
-                "bg-[#111116] rounded-[16px] border border-[rgba(255,255,255,0.06)] flex items-center gap-[14px] p-[14px] overflow-hidden transition-colors cursor-pointer group",
-                locked ? "opacity-60 grayscale cursor-not-allowed" : "hover:border-[#F5A500]/50"
+                "bg-[#151E30] rounded-[16px] border border-[rgba(255,255,255,0.06)] flex items-center gap-[14px] p-[14px] overflow-hidden transition-colors cursor-pointer group",
+                locked ? "opacity-60 grayscale cursor-not-allowed" : "hover:border-[#3B82F6]/50"
               )}
             >
               <div className="relative w-[90px] h-[70px] rounded-[12px] overflow-hidden flex-shrink-0">
@@ -878,7 +884,7 @@ export default function Lectures() {
                         setNewCourse(l);
                         setShowAddModal(true);
                       }}
-                      className="bg-[#0A0A0F]/60 backdrop-blur-md text-[#FFFFFF] text-[8px] font-heading font-[800] px-[6px] py-[2px] rounded-full hover:bg-[#F5A500] hover:text-[#0A0A0F] transition-colors uppercase"
+                      className="bg-[#0E1420]/60 backdrop-blur-md text-[#FFFFFF] text-[8px] font-heading font-[800] px-[6px] py-[2px] rounded-full hover:bg-[#3B82F6] hover:text-white transition-colors uppercase"
                     >
                       Uredi
                     </button>
@@ -899,11 +905,11 @@ export default function Lectures() {
                   alt={l.title} 
                 />
                 {locked ? (
-                  <div className="absolute inset-0 bg-[#0A0A0F]/60 flex items-center justify-center">
+                  <div className="absolute inset-0 bg-[#0E1420]/60 flex items-center justify-center">
                     <Lock className="w-[20px] h-[20px] text-[#FFFFFF]/50" />
                   </div>
                 ) : (
-                  <div className="absolute inset-0 bg-transparent group-hover:bg-[#0A0A0F]/20 flex items-center justify-center transition-colors">
+                  <div className="absolute inset-0 bg-transparent group-hover:bg-[#0E1420]/20 flex items-center justify-center transition-colors">
                     <Play className="w-[24px] h-[24px] text-[#FFFFFF] opacity-0 group-hover:opacity-100 fill-current" />
                   </div>
                 )}

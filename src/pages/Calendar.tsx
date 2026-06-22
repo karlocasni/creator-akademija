@@ -45,8 +45,14 @@ export default function Calendar() {
   useEffect(() => {
     // Read events from Firestore in real time
     const unsubscribe = onSnapshot(collection(db, 'events'), (snap) => {
-      const dbEvents = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as CalendarEvent));
-      setEvents(dbEvents);
+      if (snap.empty) {
+        import('../lib/firebase-mock').then(({ SEED_EVENTS }) => {
+          setEvents(SEED_EVENTS as any[]);
+        });
+      } else {
+        const dbEvents = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as CalendarEvent));
+        setEvents(dbEvents);
+      }
     }, (err) => {
       console.warn('[Calendar] Events fetch error, using mock fallback:', err);
       import('../lib/firebase-mock').then(({ SEED_EVENTS }) => {
@@ -231,13 +237,13 @@ export default function Calendar() {
   return (
     <div className="relative min-h-screen flex flex-col w-full max-w-full overflow-hidden pb-[24px]">
       {/* BACKGROUND LAYER */}
-      <div className="fixed inset-0 z-[-3] bg-[#0A0A0F]" />
+      <div className="fixed inset-0 z-[-3] bg-[#0E1420]" />
 
       {/* HEADER */}
       <div className="pt-[24px] px-[16px] flex items-center justify-between">
         <h1 className="font-heading font-[800] text-[28px] text-[#FFFFFF] leading-[1.1] mb-[4px] uppercase flex items-center gap-2">
           <span>RASPORED</span>
-          <span className="text-[#F5A500] font-marker font-normal tracking-normal mt-1">DOGAĐANJA</span>
+          <span className="text-[#3B82F6] font-marker font-normal tracking-normal mt-1">DOGAĐANJA</span>
         </h1>
       </div>
 
@@ -252,9 +258,9 @@ export default function Calendar() {
           whileTap={{ scale: 0.92 }}
           onClick={() => setShowAddModal(true)}
           aria-label="Dodaj događaj (samo admin)"
-          className="fixed top-[72px] right-[16px] z-[60] w-[52px] h-[52px] rounded-full bg-[#F5A500] text-[#0A0A0F] flex items-center justify-center"
+          className="fixed top-[72px] right-[16px] z-[60] w-[52px] h-[52px] rounded-full bg-[#3B82F6] text-white flex items-center justify-center"
           style={{
-            boxShadow: '0 0 0 2px rgba(245,165,0,0.25), 0 0 20px rgba(245,165,0,0.55), 0 4px 16px rgba(0,0,0,0.5)',
+            boxShadow: '0 0 0 2px rgba(59,130,246,0.25), 0 0 20px rgba(59,130,246,0.55), 0 4px 16px rgba(0,0,0,0.5)',
           }}
         >
           {/* Plus icon */}
@@ -262,10 +268,10 @@ export default function Calendar() {
 
           {/* Admin lock badge */}
           <span
-            className="absolute -bottom-[4px] -right-[4px] w-[18px] h-[18px] rounded-full bg-[#0A0A0F] border border-[#F5A500]/60 flex items-center justify-center"
+            className="absolute -bottom-[4px] -right-[4px] w-[18px] h-[18px] rounded-full bg-[#0E1420] border border-[#3B82F6]/60 flex items-center justify-center"
             aria-hidden
           >
-            <Lock className="w-[9px] h-[9px] text-[#F5A500]" strokeWidth={2.5} />
+            <Lock className="w-[9px] h-[9px] text-[#3B82F6]" strokeWidth={2.5} />
           </span>
         </motion.button>
       )}
@@ -309,8 +315,8 @@ export default function Calendar() {
               >
                 <div className={cn(
                   "w-[32px] h-[32px] flex items-center justify-center rounded-full font-heading font-[700] text-[16px] transition-all",
-                  today && !isSelected ? "border-[2px] border-[#F5A500] text-[#F5A500]" : "text-white",
-                  isSelected ? "bg-[#F5A500] text-[#0A0A0F]" : "hover:bg-[rgba(255,255,255,0.1)]"
+                  today && !isSelected ? "border-[2px] border-[#3B82F6] text-[#3B82F6]" : "text-white",
+                  isSelected ? "bg-[#3B82F6] text-[#0E1420]" : "hover:bg-[rgba(255,255,255,0.1)]"
                 )}>
                   {day}
                 </div>
@@ -321,7 +327,7 @@ export default function Calendar() {
                         key={i} 
                         className="w-[4px] h-[4px] rounded-full"
                         style={{ 
-                          backgroundColor: e.type === 'live_qa' ? '#F5A500' : e.type === 'guest_lecture' ? '#8B5CF6' : '#22C55E' 
+                          backgroundColor: e.type === 'live_qa' ? '#3B82F6' : e.type === 'guest_lecture' ? '#8B5CF6' : '#22C55E' 
                         }}
                       />
                     ))}
@@ -349,7 +355,7 @@ export default function Calendar() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="fixed bottom-0 left-0 right-0 z-[50] bg-[#111116] border-t border-[rgba(255,255,255,0.06)] rounded-t-[32px] p-[24px] pb-[40px] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] overflow-hidden"
+              className="fixed bottom-0 left-0 right-0 z-[50] bg-[#151E30] border-t border-[rgba(255,255,255,0.06)] rounded-t-[32px] p-[24px] pb-[40px] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] overflow-hidden"
             >
               {selectedEvent.bgImage && (
                 <>
@@ -357,7 +363,7 @@ export default function Calendar() {
                     className="absolute inset-0 z-0 bg-cover bg-center opacity-[0.3]" 
                     style={{ backgroundImage: `url(${selectedEvent.bgImage})` }} 
                   />
-                  <div className="absolute inset-0 z-0 bg-gradient-to-t from-[#111116] via-[#111116]/80 to-transparent" />
+                  <div className="absolute inset-0 z-0 bg-gradient-to-t from-[#151E30] via-[#151E30]/80 to-transparent" />
                   <div className="absolute inset-0 z-0 bg-black/40" />
                 </>
               )}
@@ -367,7 +373,7 @@ export default function Calendar() {
               
               <div className="flex justify-between items-start mb-[16px]">
                 <span className={cn("inline-block text-[10px] font-mono font-[700] uppercase tracking-widest px-[12px] py-[6px] rounded-full", 
-                  selectedEvent.type === 'live_qa' ? 'bg-[#F5A500]/20 text-[#F5A500]' : 
+                  selectedEvent.type === 'live_qa' ? 'bg-[#3B82F6]/20 text-[#3B82F6]' : 
                   selectedEvent.type === 'guest_lecture' ? 'bg-indigo-500/20 text-indigo-400' : 
                   'bg-emerald-500/20 text-emerald-400'
                 )}>
@@ -405,7 +411,7 @@ export default function Calendar() {
               <div className="flex gap-[16px] mb-[24px]">
                 <div className="flex items-center gap-[12px]">
                   <div className="w-[40px] h-[40px] rounded-full bg-[rgba(255,255,255,0.05)] flex items-center justify-center">
-                    <Clock className="w-[18px] h-[18px] text-[#F5A500]" />
+                    <Clock className="w-[18px] h-[18px] text-[#3B82F6]" />
                   </div>
                   <div className="flex flex-col">
                     <span className="font-mono font-[700] text-[10px] text-[#8B8FA8] uppercase tracking-widest">Vrijeme</span>
@@ -417,14 +423,14 @@ export default function Calendar() {
                 
                 <div className="flex items-center gap-[12px]">
                   <div className="w-[40px] h-[40px] rounded-full bg-[rgba(255,255,255,0.05)] flex items-center justify-center">
-                    <User className="w-[18px] h-[18px] text-[#F5A500]" />
+                    <User className="w-[18px] h-[18px] text-[#3B82F6]" />
                   </div>
                   <div className="flex flex-col">
                     <span className="font-mono font-[700] text-[10px] text-[#8B8FA8] uppercase tracking-widest">Host</span>
                     {selectedEvent.creatorId ? (
                       <Link 
                         to={`/creator/${selectedEvent.creatorId}`} 
-                        className="font-sans font-[700] text-[14px] text-[#F5A500] hover:underline transition-all"
+                        className="font-sans font-[700] text-[14px] text-[#3B82F6] hover:underline transition-all"
                       >
                         {selectedEvent.speaker}
                       </Link>
@@ -447,7 +453,7 @@ export default function Calendar() {
               ) : (
                 <button
                   onClick={() => handleRsvp(selectedEvent.id)}
-                  className="w-full py-[16px] bg-[#F5A500] text-[#0A0A0F] rounded-full font-heading font-[800] text-[14px] uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-transform shadow-[0_0_20px_rgba(245,165,0,0.3)]"
+                  className="w-full py-[16px] bg-[#3B82F6] text-white rounded-full font-heading font-[800] text-[14px] uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-transform shadow-[0_0_20px_rgba(59,130,246,0.3)]"
                 >
                   REZERVIRAJ MJESTO (+50 XP)
                 </button>
@@ -462,13 +468,13 @@ export default function Calendar() {
       <AnimatePresence>
         {showAddModal && (
           <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center">
-            <div className="absolute inset-0 bg-[#0A0A0F]/80 backdrop-blur-md" onClick={() => setShowAddModal(false)} />
+            <div className="absolute inset-0 bg-[#0E1420]/80 backdrop-blur-md" onClick={() => setShowAddModal(false)} />
             <motion.div 
               initial={{ y: '100%', opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: '100%', opacity: 0 }}
               transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-              className="relative w-full md:max-w-lg bg-[#111116] rounded-t-[28px] md:rounded-[24px] border border-[rgba(255,255,255,0.06)] shadow-2xl flex flex-col"
+              className="relative w-full md:max-w-lg bg-[#151E30] rounded-t-[28px] md:rounded-[24px] border border-[rgba(255,255,255,0.06)] shadow-2xl flex flex-col"
               style={{ maxHeight: '92vh' }}
             >
               {/* Drag handle (mobile) */}
@@ -479,7 +485,7 @@ export default function Calendar() {
                 <h2 className="font-heading font-[800] text-[22px] text-white uppercase">Dodaj Događaj</h2>
                 <button 
                   onClick={() => setShowAddModal(false)}
-                  className="w-[36px] h-[36px] rounded-full bg-[#F5A500]/10 border border-[#F5A500]/30 text-[#F5A500] flex items-center justify-center hover:bg-[#F5A500]/20 transition-colors"
+                  className="w-[36px] h-[36px] rounded-full bg-[#3B82F6]/10 border border-[#3B82F6]/30 text-[#3B82F6] flex items-center justify-center hover:bg-[#3B82F6]/20 transition-colors"
                 >
                   <X className="w-[18px] h-[18px]" />
                 </button>
@@ -577,7 +583,7 @@ export default function Calendar() {
                 </div>
 
                 <div className="flex gap-[12px] mt-[8px] pb-[4px]">
-                  <button onClick={handleSaveEvent} className="flex-1 py-[14px] rounded-[14px] font-heading font-[700] uppercase text-[#0A0A0F] bg-[#F5A500] hover:bg-[#ffb31a] transition-colors text-[15px] shadow-[0_0_20px_rgba(245,165,0,0.3)]">Spremi događaj</button>
+                  <button onClick={handleSaveEvent} className="flex-1 py-[14px] rounded-[14px] font-heading font-[700] uppercase text-white bg-[#3B82F6] hover:bg-[#2563EB] transition-colors text-[15px] shadow-[0_0_20px_rgba(59,130,246,0.3)]">Spremi događaj</button>
                 </div>
               </div>
               </div>

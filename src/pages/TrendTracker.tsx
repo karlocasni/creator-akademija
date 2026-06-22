@@ -89,13 +89,13 @@ export default function TrendTracker() {
           Pregledaj i filtriraj najpopularnije zvukove, formate i hashtagove.
         </p>
 
-        <div className="bg-[#111116] rounded-[24px] border border-[rgba(255,255,255,0.06)] p-[20px] relative overflow-hidden">
+        <div className="bg-[#151E30] rounded-[24px] border border-[rgba(255,255,255,0.06)] p-[20px] relative overflow-hidden">
           <div className="absolute top-0 right-0 bg-emerald-500/10 text-emerald-400 px-4 py-1.5 rounded-bl-[16px] font-heading font-[800] text-[10px] tracking-widest uppercase flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /> Live
           </div>
 
           <div className="flex items-center gap-[12px] mb-[16px]">
-            <div className="w-[48px] h-[48px] rounded-full bg-[rgba(245,165,0,0.1)] text-[#F5A500] flex items-center justify-center shrink-0">
+            <div className="w-[48px] h-[48px] rounded-full bg-[rgba(59,130,246,0.1)] text-[#3B82F6] flex items-center justify-center shrink-0">
               <Flame className="w-[24px] h-[24px]" />
             </div>
             <h2 className="font-heading font-[700] text-[18px] text-[#FFFFFF]">Trend Tracker</h2>
@@ -107,7 +107,7 @@ export default function TrendTracker() {
               onClick={() => setFilter('all')}
               className={cn(
                 "px-[16px] py-[8px] rounded-full font-heading font-[700] text-[12px] uppercase tracking-widest whitespace-nowrap transition-colors",
-                filter === 'all' ? "bg-[#FFFFFF] text-[#0A0A0F]" : "bg-[rgba(255,255,255,0.05)] text-[#8B8FA8] hover:bg-[rgba(255,255,255,0.1)]"
+                filter === 'all' ? "bg-[#FFFFFF] text-[#0E1420]" : "bg-[rgba(255,255,255,0.05)] text-[#8B8FA8] hover:bg-[rgba(255,255,255,0.1)]"
               )}
             >
               Sve
@@ -116,7 +116,7 @@ export default function TrendTracker() {
               onClick={() => setFilter('audio')}
               className={cn(
                 "px-[16px] py-[8px] rounded-full font-heading font-[700] text-[12px] uppercase tracking-widest whitespace-nowrap transition-colors",
-                filter === 'audio' ? "bg-[#FFFFFF] text-[#0A0A0F]" : "bg-[rgba(255,255,255,0.05)] text-[#8B8FA8] hover:bg-[rgba(255,255,255,0.1)]"
+                filter === 'audio' ? "bg-[#FFFFFF] text-[#0E1420]" : "bg-[rgba(255,255,255,0.05)] text-[#8B8FA8] hover:bg-[rgba(255,255,255,0.1)]"
               )}
             >
               Zvukovi
@@ -125,7 +125,7 @@ export default function TrendTracker() {
               onClick={() => setFilter('format')}
               className={cn(
                 "px-[16px] py-[8px] rounded-full font-heading font-[700] text-[12px] uppercase tracking-widest whitespace-nowrap transition-colors",
-                filter === 'format' ? "bg-[#FFFFFF] text-[#0A0A0F]" : "bg-[rgba(255,255,255,0.05)] text-[#8B8FA8] hover:bg-[rgba(255,255,255,0.1)]"
+                filter === 'format' ? "bg-[#FFFFFF] text-[#0E1420]" : "bg-[rgba(255,255,255,0.05)] text-[#8B8FA8] hover:bg-[rgba(255,255,255,0.1)]"
               )}
             >
               Formati
@@ -134,7 +134,7 @@ export default function TrendTracker() {
               onClick={() => setFilter('hashtag')}
               className={cn(
                 "px-[16px] py-[8px] rounded-full font-heading font-[700] text-[12px] uppercase tracking-widest whitespace-nowrap transition-colors",
-                filter === 'hashtag' ? "bg-[#FFFFFF] text-[#0A0A0F]" : "bg-[rgba(255,255,255,0.05)] text-[#8B8FA8] hover:bg-[rgba(255,255,255,0.1)]"
+                filter === 'hashtag' ? "bg-[#FFFFFF] text-[#0E1420]" : "bg-[rgba(255,255,255,0.05)] text-[#8B8FA8] hover:bg-[rgba(255,255,255,0.1)]"
               )}
             >
               Hashtags
@@ -144,7 +144,7 @@ export default function TrendTracker() {
           {/* TRENDS LIST */}
           <div className="flex flex-col gap-[12px]">
             {filteredTrends.map(trend => (
-              <div key={trend.id} className="bg-[#0A0A0F] border border-[rgba(255,255,255,0.04)] rounded-[16px] p-[16px] flex flex-col gap-[12px]">
+              <div key={trend.id} className="bg-[#0E1420] border border-[rgba(255,255,255,0.04)] rounded-[16px] p-[16px] flex flex-col gap-[12px]">
                 <div className="flex items-start justify-between gap-[12px]">
                   <div className="flex items-center gap-[12px]">
                     <div className="w-[32px] h-[32px] rounded-full bg-[rgba(255,255,255,0.05)] flex items-center justify-center shrink-0">
@@ -159,7 +159,7 @@ export default function TrendTracker() {
                   </div>
                   <div className={cn(
                     "px-[8px] py-[4px] rounded-[6px] font-mono text-[10px] font-[700] uppercase tracking-widest shrink-0",
-                    trend.trend === 'high' ? "bg-emerald-500/10 text-emerald-400" : "bg-[#F5A500]/10 text-[#F5A500]"
+                    trend.trend === 'high' ? "bg-emerald-500/10 text-emerald-400" : "bg-[#3B82F6]/10 text-[#3B82F6]"
                   )}>
                     {trend.trend === 'high' ? '🔥 HOT' : '📈 RASTE'}
                   </div>
@@ -180,8 +180,8 @@ export default function TrendTracker() {
                     onClick={() => handleSaveTrend(trend)}
                     className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
                       isSaved(trend.id)
-                        ? 'bg-[#F5A500]/20 text-[#F5A500]'
-                        : 'bg-[rgba(255,255,255,0.05)] text-[#8B8FA8] hover:bg-[#F5A500]/10 hover:text-[#F5A500]'
+                        ? 'bg-[#3B82F6]/20 text-[#3B82F6]'
+                        : 'bg-[rgba(255,255,255,0.05)] text-[#8B8FA8] hover:bg-[#3B82F6]/10 hover:text-[#3B82F6]'
                     }`}
                     title={isSaved(trend.id) ? 'Ukloni iz spremljenoga' : 'Spremi trend'}
                   >

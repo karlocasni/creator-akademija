@@ -59,7 +59,7 @@ export default function BottomNav() {
 
       {/* pill nav — sits above the safe-area with proper bottom padding */}
       <nav
-        className="relative w-full max-w-md mx-auto bg-[#111116]/90 backdrop-blur-xl border border-white/5 rounded-full px-6 flex items-center justify-between shadow-2xl pointer-events-auto"
+        className="relative w-full max-w-md mx-auto bg-[#151E30]/90 backdrop-blur-xl border border-white/5 rounded-full px-6 flex items-center justify-between shadow-2xl pointer-events-auto"
         style={{
           marginBottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)',
           paddingTop: '8px',
@@ -75,13 +75,13 @@ export default function BottomNav() {
               to={item.path}
               className={cn(
                 "flex flex-col items-center justify-center transition-all duration-300",
-                isActive ? "text-[#F5A500]" : "text-[#8B8FA8] hover:text-white"
+                isActive ? "text-[#3B82F6]" : "text-[#8B8FA8] hover:text-white"
               )}
               title={item.label}
             >
               <div className={cn(
                 "flex items-center justify-center p-2 rounded-full",
-                isActive ? "bg-[#F5A500]/10 shadow-[0_0_15px_rgba(245,165,0,0.3)]" : ""
+                isActive ? "bg-[#3B82F6]/10 shadow-[0_0_15px_rgba(59,130,246,0.3)]" : ""
               )}>
                 <span
                   className="material-symbols-outlined"
@@ -99,7 +99,7 @@ export default function BottomNav() {
           <button
             onClick={handleFab}
             aria-label="Nova objava"
-            className="w-14 h-14 bg-[#F5A500] rounded-full flex items-center justify-center shadow-[0_8px_20px_rgba(245,165,0,0.4)] text-[#0A0A0F] active:scale-95 transition-transform"
+            className="w-14 h-14 bg-[#3B82F6] rounded-full flex items-center justify-center shadow-[0_8px_20px_rgba(59,130,246,0.4)] text-white active:scale-95 transition-transform"
           >
             <span className="material-symbols-outlined text-3xl font-bold">add</span>
           </button>
@@ -114,13 +114,13 @@ export default function BottomNav() {
               to={item.path}
               className={cn(
                 "flex flex-col items-center justify-center transition-all duration-300",
-                isActive ? "text-[#F5A500]" : "text-[#8B8FA8] hover:text-white"
+                isActive ? "text-[#3B82F6]" : "text-[#8B8FA8] hover:text-white"
               )}
               title={item.label}
             >
               <div className={cn(
                 "flex items-center justify-center p-2 rounded-full",
-                isActive ? "bg-[#F5A500]/10 shadow-[0_0_15px_rgba(245,165,0,0.3)]" : ""
+                isActive ? "bg-[#3B82F6]/10 shadow-[0_0_15px_rgba(59,130,246,0.3)]" : ""
               )}>
                 <span
                   className="material-symbols-outlined"

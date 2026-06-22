@@ -55,7 +55,13 @@ export default function Submissions() {
   useEffect(() => {
     // Load courses for selection
     const unsubCourses = onSnapshot(collection(db, 'courses'), (snap) => {
-      setCourses(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lecture)));
+      if (snap.empty) {
+        import('../lib/firebase-mock').then(({ SEED_COURSES }) => {
+          setCourses(SEED_COURSES as any[]);
+        });
+      } else {
+        setCourses(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lecture)));
+      }
     }, (err) => {
       console.warn('[Submissions] Courses fetch error, using mock fallback:', err);
       import('../lib/firebase-mock').then(({ SEED_COURSES }) => {
@@ -189,14 +195,14 @@ export default function Submissions() {
       </header>
 
       {/* Tab Switcher */}
-      <div className="flex gap-1 p-1 bg-[#111116] rounded-2xl border border-white/5 mb-8">
+      <div className="flex gap-1 p-1 bg-[#151E30] rounded-2xl border border-white/5 mb-8">
         {!isAdmin ? (
           <>
             <button
               onClick={() => setActiveTab('novi')}
               className={cn(
                 "flex-1 py-3 rounded-xl text-xs font-bold transition-all uppercase tracking-wider flex items-center justify-center gap-2",
-                activeTab === 'novi' ? 'bg-[#F5A500] text-black font-black' : 'text-[#8B8FA8] hover:text-white'
+                activeTab === 'novi' ? 'bg-[#3B82F6] text-white font-black' : 'text-[#8B8FA8] hover:text-white'
               )}
             >
               <Upload className="w-4 h-4" />
@@ -206,7 +212,7 @@ export default function Submissions() {
               onClick={() => setActiveTab('moje')}
               className={cn(
                 "flex-1 py-3 rounded-xl text-xs font-bold transition-all uppercase tracking-wider flex items-center justify-center gap-2",
-                activeTab === 'moje' ? 'bg-[#F5A500] text-black font-black' : 'text-[#8B8FA8] hover:text-white'
+                activeTab === 'moje' ? 'bg-[#3B82F6] text-white font-black' : 'text-[#8B8FA8] hover:text-white'
               )}
             >
               <Video className="w-4 h-4" />
@@ -219,7 +225,7 @@ export default function Submissions() {
               onClick={() => setActiveTab('pending')}
               className={cn(
                 "flex-1 py-3 rounded-xl text-xs font-bold transition-all uppercase tracking-wider flex items-center justify-center gap-2",
-                activeTab === 'pending' ? 'bg-[#F5A500] text-black font-black' : 'text-[#8B8FA8] hover:text-white'
+                activeTab === 'pending' ? 'bg-[#3B82F6] text-white font-black' : 'text-[#8B8FA8] hover:text-white'
               )}
             >
               <Clock className="w-4 h-4" />
@@ -229,7 +235,7 @@ export default function Submissions() {
               onClick={() => setActiveTab('graded')}
               className={cn(
                 "flex-1 py-3 rounded-xl text-xs font-bold transition-all uppercase tracking-wider flex items-center justify-center gap-2",
-                activeTab === 'graded' ? 'bg-[#F5A500] text-black font-black' : 'text-[#8B8FA8] hover:text-white'
+                activeTab === 'graded' ? 'bg-[#3B82F6] text-white font-black' : 'text-[#8B8FA8] hover:text-white'
               )}
             >
               <CheckCircle2 className="w-4 h-4" />
@@ -296,7 +302,7 @@ export default function Submissions() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full py-4 bg-primary text-black rounded-2xl font-black text-lg hover:scale-[1.02] active:scale-95 transition-transform disabled:opacity-50"
+              className="w-full py-4 bg-primary text-white rounded-2xl font-black text-lg hover:scale-[1.02] active:scale-95 transition-transform disabled:opacity-50"
             >
               {submitting ? 'PREDAJEM...' : 'PREDAJ VIDEO URADAK'}
             </button>
@@ -319,7 +325,7 @@ export default function Submissions() {
                   <div className="flex items-center gap-3">
                     <span className={cn(
                       "text-[9px] font-mono font-bold uppercase tracking-widest px-2.5 py-1 rounded-full",
-                      sub.status === 'pending' ? 'bg-[#F5A500]/20 text-[#F5A500]' : 'bg-emerald-500/20 text-emerald-400'
+                      sub.status === 'pending' ? 'bg-[#3B82F6]/20 text-[#3B82F6]' : 'bg-emerald-500/20 text-emerald-400'
                     )}>
                       {sub.status === 'pending' ? 'Na čekanju' : 'Ocijenjeno'}
                     </span>
@@ -337,7 +343,7 @@ export default function Submissions() {
                     href={sub.videoLink} 
                     target="_blank" 
                     rel="noreferrer" 
-                    className="inline-flex items-center gap-1.5 text-xs text-[#F5A500] hover:underline"
+                    className="inline-flex items-center gap-1.5 text-xs text-[#3B82F6] hover:underline"
                   >
                     Gledaj predani video <ExternalLink className="w-3.5 h-3.5" />
                   </a>
@@ -345,7 +351,7 @@ export default function Submissions() {
                   {sub.status === 'graded' && sub.feedback && (
                     <div className="mt-4 p-4 bg-white/5 border border-white/5 rounded-2xl space-y-2">
                       <div className="flex items-center gap-2">
-                        <ShieldCheck className="w-4 h-4 text-[#F5A500]" />
+                        <ShieldCheck className="w-4 h-4 text-[#3B82F6]" />
                         <span className="text-[10px] font-black text-white uppercase tracking-wider">Komentar mentora ({sub.gradedBy}):</span>
                       </div>
                       <p className="text-sm text-[#8B8FA8] whitespace-pre-wrap">{sub.feedback}</p>
@@ -354,9 +360,9 @@ export default function Submissions() {
                 </div>
 
                 {sub.status === 'graded' && (
-                  <div className="flex flex-col items-center justify-center shrink-0 w-24 h-24 bg-[#F5A500]/10 border border-[#F5A500]/30 rounded-2xl">
+                  <div className="flex flex-col items-center justify-center shrink-0 w-24 h-24 bg-[#3B82F6]/10 border border-[#3B82F6]/30 rounded-2xl">
                     <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest leading-none">Ocjena</span>
-                    <span className="text-4xl font-black text-[#F5A500] mt-1">{sub.grade}</span>
+                    <span className="text-4xl font-black text-[#3B82F6] mt-1">{sub.grade}</span>
                     <span className="text-[9px] text-[#8B8FA8] mt-0.5">od 5</span>
                   </div>
                 )}
@@ -386,7 +392,7 @@ export default function Submissions() {
                     </div>
                   </div>
 
-                  <h3 className="text-base font-bold text-[#F5A500] uppercase mt-2">{sub.lectureTitle}</h3>
+                  <h3 className="text-base font-bold text-[#3B82F6] uppercase mt-2">{sub.lectureTitle}</h3>
                   {sub.description && (
                     <p className="text-xs text-[#8B8FA8] italic">"{sub.description}"</p>
                   )}
@@ -403,7 +409,7 @@ export default function Submissions() {
                   </a>
                   <button 
                     onClick={() => setSelectedSubmission(sub)}
-                    className="px-4 py-2.5 bg-[#F5A500] text-black rounded-xl text-xs font-black uppercase tracking-wider hover:scale-105 active:scale-95 transition-transform"
+                    className="px-4 py-2.5 bg-[#3B82F6] text-white rounded-xl text-xs font-black uppercase tracking-wider hover:scale-105 active:scale-95 transition-transform"
                   >
                     Ocjeni
                   </button>
@@ -435,7 +441,7 @@ export default function Submissions() {
                   </div>
 
                   <h3 className="text-base font-bold text-white uppercase mt-2">{sub.lectureTitle}</h3>
-                  <a href={sub.videoLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-[#F5A500] hover:underline">
+                  <a href={sub.videoLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-[#3B82F6] hover:underline">
                     Gledaj video <ExternalLink className="w-3 h-3" />
                   </a>
 
@@ -465,7 +471,7 @@ export default function Submissions() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="relative w-full max-w-md bg-[#111116] border border-white/5 p-8 rounded-[2.5rem] shadow-2xl overflow-y-auto max-h-[90vh]"
+              className="relative w-full max-w-md bg-[#151E30] border border-white/5 p-8 rounded-[2.5rem] shadow-2xl overflow-y-auto max-h-[90vh]"
             >
               <button 
                 onClick={() => setSelectedSubmission(null)}
@@ -493,11 +499,11 @@ export default function Submissions() {
                         className={cn(
                           "flex-1 py-3 rounded-xl font-heading font-black text-lg transition-all flex items-center justify-center gap-1",
                           grade === num 
-                            ? "bg-primary text-black shadow-lg shadow-primary/20" 
+                            ? "bg-primary text-white shadow-lg shadow-primary/20" 
                             : "bg-white/5 text-[#8B8FA8] hover:bg-white/10"
                         )}
                       >
-                        {num} <Star className={cn("w-4 h-4 fill-current", grade === num ? "text-black" : "text-[#8B8FA8]")} />
+                        {num} <Star className={cn("w-4 h-4 fill-current", grade === num ? "text-white" : "text-[#8B8FA8]")} />
                       </button>
                     ))}
                   </div>
@@ -518,7 +524,7 @@ export default function Submissions() {
                 <button
                   type="submit"
                   disabled={grading}
-                  className="w-full py-4 bg-primary text-black rounded-2xl font-black text-lg hover:scale-[1.02] active:scale-95 transition-transform disabled:opacity-50"
+                  className="w-full py-4 bg-primary text-white rounded-2xl font-black text-lg hover:scale-[1.02] active:scale-95 transition-transform disabled:opacity-50"
                 >
                   {grading ? 'SPREMANJE...' : 'SPREMI OCJENU (+100 XP Studentu)'}
                 </button>

@@ -6,7 +6,7 @@
   --color-background: var(--bg-base);
   --color-foreground: var(--text-primary);
   --color-primary: var(--accent-primary);
-  --color-primary-foreground: #0A0A0F;
+  --color-primary-foreground: #FFFFFF;
   --color-muted: var(--bg-surface-2);
   --color-muted-foreground: var(--text-muted);
   
@@ -18,18 +18,18 @@
 
 @layer base {
   :root {
-    --bg-base: #0A0A0F;
-    --bg-surface: #111116;
-    --bg-surface-2: #1A1A22;
-    --bg-surface-3: #222230;
-    --accent-primary: #F5A500;
-    --accent-hover: #FFB800;
-    --accent-dim: rgba(245, 165, 0, 0.12);
+    --bg-base: #0E1420;
+    --bg-surface: #151E30;
+    --bg-surface-2: #1D2A44;
+    --bg-surface-3: #2B3B5C;
+    --accent-primary: #3B82F6;
+    --accent-hover: #2563EB;
+    --accent-dim: rgba(59, 130, 246, 0.12);
     --text-primary: #FFFFFF;
     --text-secondary: #8B8FA8;
     --text-muted: #4A4A5A;
     --border-subtle: rgba(255, 255, 255, 0.06);
-    --border-accent: rgba(245, 165, 0, 0.25);
+    --border-accent: rgba(59, 130, 246, 0.25);
     --success: #22C55E;
     --danger: #EF4444;
   }
@@ -39,6 +39,7 @@
     color: var(--text-primary);
     font-family: var(--font-sans);
     -webkit-tap-highlight-color: transparent;
+    overflow-x: hidden;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -47,6 +48,16 @@
 
   html {
     scroll-behavior: smooth;
+  }
+
+  /* Hide scrollbar globally for html and body while keeping scroll active */
+  html, body {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar {
+    display: none;
   }
 }
 
@@ -72,7 +83,7 @@
   -webkit-background-clip: text;
   color: transparent;
   background-image: linear-gradient(135deg, var(--accent-primary) 0%, #fff 100%);
-  filter: drop-shadow(0 0 30px rgba(245, 165, 0, 0.15));
+  filter: drop-shadow(0 0 30px rgba(59, 130, 246, 0.15));
 }
 
 @utility bg-noise {
@@ -85,7 +96,7 @@
 .btn-primary {
   border-radius: 999px;
   background: var(--accent-primary);
-  color: #0A0A0F;
+  color: #FFFFFF;
   font-family: 'Bricolage Grotesque', sans-serif;
   font-weight: 700;
   padding: 14px 28px;
@@ -95,7 +106,7 @@
 .btn-primary:hover {
   background: var(--accent-hover);
   transform: translateY(-1px);
-  box-shadow: 0 8px 24px rgba(245, 165, 0, 0.35);
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.35);
 }
 
 .btn-secondary {
@@ -159,30 +170,30 @@
 
 /* Custom classes from HTML mockup */
 .active-tab-border {
-  border-bottom: 2px solid #F5A500;
+  border-bottom: 2px solid var(--accent-primary);
 }
 .glass-nav {
-  background: rgba(17, 17, 22, 0.95);
+  background: rgba(21, 30, 48, 0.95);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
 .fab-glow {
-  box-shadow: 0 0 0 6px rgba(245,165,0,0.1), 0 8px 28px rgba(245,165,0,0.5);
+  box-shadow: 0 0 0 6px rgba(59,130,246,0.1), 0 8px 28px rgba(59,130,246,0.5);
 }
 .post-card {
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  background: linear-gradient(180deg, rgba(255,255,255,0.02) 0%, transparent 60%), #111116;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02) 0%, transparent 60%), var(--bg-surface);
 }
 
 .admin-post {
-  border: 1px solid rgba(245, 165, 0, 0.6) !important;
-  box-shadow: 0 0 25px rgba(245, 165, 0, 0.15), inset 0 0 15px rgba(245, 165, 0, 0.03) !important;
-  background: linear-gradient(180deg, rgba(245,165,0,0.08) 0%, transparent 60%), #111116 !important;
+  border: 1px solid rgba(59, 130, 246, 0.6) !important;
+  box-shadow: 0 0 25px rgba(59, 130, 246, 0.15), inset 0 0 15px rgba(59, 130, 246, 0.03) !important;
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.08) 0%, transparent 60%), var(--bg-surface) !important;
 }
 .lvl-badge {
   background: transparent !important;
-  border: 1.5px solid #F5A500 !important;
-  color: #F5A500 !important;
+  border: 1.5px solid var(--accent-primary) !important;
+  color: var(--accent-primary) !important;
   border-radius: 999px !important;
   font-family: 'Space Mono', monospace !important;
   font-weight: 700 !important;
@@ -194,8 +205,8 @@
   justify-content: center !important;
 }
 .active-avatar {
-  border: 2px solid #F5A500 !important;
-  box-shadow: 0 0 10px rgba(245, 165, 0, 0.35);
+  border: 2px solid var(--accent-primary) !important;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.35);
   border-radius: 999px;
 }
 .hide-scrollbar::-webkit-scrollbar {

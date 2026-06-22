@@ -28,24 +28,28 @@ const Paywall = lazy(() => import('./pages/Paywall'));
 function AppRoutes() {
   const { user, profile, loading } = useAuth();
   const location = useLocation();
-  const [direction, setDirection] = useState(0);
-  const prevPathRef = useRef(location.pathname);
+  const [state, setState] = useState({
+    path: location.pathname,
+    direction: 0,
+  });
 
-  useEffect(() => {
+  if (location.pathname !== state.path) {
     const PATH_ORDER = ['/feed', '/lectures', '/submissions', '/calendar', '/profile', '/messages', '/members'];
-    const curPath = location.pathname;
-    const prevPath = prevPathRef.current;
-    if (curPath !== prevPath) {
-      const curIndex = PATH_ORDER.findIndex(p => curPath.startsWith(p));
-      const prevIndex = PATH_ORDER.findIndex(p => prevPath.startsWith(p));
-      if (curIndex !== -1 && prevIndex !== -1) {
-        setDirection(curIndex > prevIndex ? 1 : -1);
-      } else {
-        setDirection(curPath > prevPath ? 1 : -1);
-      }
-      prevPathRef.current = curPath;
+    const curIndex = PATH_ORDER.findIndex(p => location.pathname.startsWith(p));
+    const prevIndex = PATH_ORDER.findIndex(p => state.path.startsWith(p));
+    let newDirection = 0;
+    if (curIndex !== -1 && prevIndex !== -1) {
+      newDirection = curIndex > prevIndex ? 1 : -1;
+    } else {
+      newDirection = location.pathname > state.path ? 1 : -1;
     }
-  }, [location.pathname]);
+    setState({
+      path: location.pathname,
+      direction: newDirection,
+    });
+  }
+
+  const direction = state.direction;
 
   if (loading) {
     return (
@@ -109,32 +113,38 @@ function AppRoutes() {
               animate="center"
               exit="exit"
               transition={{ duration: 0.2, ease: 'easeInOut' }}
-              className="w-full"
+              className="w-full overflow-x-hidden"
             >
-              <Routes location={location}>
-            <Route path="/feed" element={<Feed />} />
-            <Route path="/lectures" element={<Lectures />} />
-            <Route path="/tools" element={<Navigate to="/submissions" replace />} />
-            <Route path="/submissions" element={<Submissions />} />
-            <Route path="/tools/hook-generator" element={<ViralHookGenerator />} />
-            <Route path="/tools/trend-tracker" element={<TrendTracker />} />
-            <Route path="/tools/video-ideas" element={<VideoIdeaGenerator />} />
-            <Route path="/tools/hook-vault" element={<HookVault />} />
-            <Route path="/challenge" element={<Challenge />} />
-            <Route path="/calendar" element={<Calendar />} />
-            
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/profile/:userId" element={<Profile />} />
-            <Route path="/profile/u/:username" element={<Profile />} />
-            <Route path="/creator/:creatorId" element={<CreatorPage />} />
-            
-             <Route path="/messages" element={<Messages />} />
-             <Route path="/messages/:chatId" element={<Messages />} />
-             
-             <Route path="/leaderboard" element={<Navigate to="/profile" replace />} />
-             <Route path="/members" element={<Members />} />
-             <Route path="*" element={<Navigate to="/feed" replace />} />
-          </Routes>
+              <Suspense fallback={
+                <div className="flex items-center justify-center py-20 bg-background">
+                  <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              }>
+                <Routes location={location}>
+                  <Route path="/feed" element={<Feed />} />
+                  <Route path="/lectures" element={<Lectures />} />
+                  <Route path="/tools" element={<Navigate to="/submissions" replace />} />
+                  <Route path="/submissions" element={<Submissions />} />
+                  <Route path="/tools/hook-generator" element={<ViralHookGenerator />} />
+                  <Route path="/tools/trend-tracker" element={<TrendTracker />} />
+                  <Route path="/tools/video-ideas" element={<VideoIdeaGenerator />} />
+                  <Route path="/tools/hook-vault" element={<HookVault />} />
+                  <Route path="/challenge" element={<Challenge />} />
+                  <Route path="/calendar" element={<Calendar />} />
+                  
+                  <Route path="/profile" element={<Profile />} />
+                  <Route path="/profile/:userId" element={<Profile />} />
+                  <Route path="/profile/u/:username" element={<Profile />} />
+                  <Route path="/creator/:creatorId" element={<CreatorPage />} />
+                  
+                  <Route path="/messages" element={<Messages />} />
+                  <Route path="/messages/:chatId" element={<Messages />} />
+                  
+                  <Route path="/leaderboard" element={<Navigate to="/profile" replace />} />
+                  <Route path="/members" element={<Members />} />
+                  <Route path="*" element={<Navigate to="/feed" replace />} />
+                </Routes>
+              </Suspense>
             </motion.div>
           </AnimatePresence>
         </ErrorBoundary>

@@ -14,7 +14,7 @@ export default function TopBar() {
     <div
       className="sticky top-0 z-50 relative flex items-center justify-between px-[18px] border-b border-[rgba(255,255,255,0.06)]"
       style={{
-        background: '#0A0A0F',
+        background: '#0E1420',
         paddingTop: 'calc(env(safe-area-inset-top) + 10px)',
         paddingBottom: '14px',
       }}
@@ -31,7 +31,7 @@ export default function TopBar() {
               height: 220,
               borderRadius: '50%',
               background:
-                'radial-gradient(50% 50% at 50% 50%, rgba(245,165,0,.15) 0%, transparent 70%)',
+                'radial-gradient(50% 50% at 50% 50%, rgba(59,130,246,.15) 0%, transparent 70%)',
             }}
           />
         </div>
@@ -46,17 +46,17 @@ export default function TopBar() {
             style={{
               fontSize: 16,
               letterSpacing: '.02em',
-              textShadow: '0 0 18px rgba(255,255,255,.35), 0 0 40px rgba(245,165,0,.12)',
+              textShadow: '0 0 18px rgba(255,255,255,.35), 0 0 40px rgba(59,130,246,.12)',
             }}
           >
             CREATOR
           </span>
           <span
-            className="font-mono font-bold text-[#F5A500] uppercase"
+            className="font-mono font-bold text-[#3B82F6] uppercase"
             style={{
               fontSize: 9.5,
               letterSpacing: '.32em',
-              textShadow: '0 0 12px rgba(245,165,0,.80), 0 0 28px rgba(245,165,0,.45)',
+              textShadow: '0 0 12px rgba(59,130,246,.80), 0 0 28px rgba(59,130,246,.45)',
             }}
           >
             AKADEMIJA
@@ -74,10 +74,10 @@ export default function TopBar() {
             style={{
               padding: '5px 11px 5px 7px',
               borderRadius: 999,
-              border: '1.3px solid rgba(245,165,0,.45)',
-              background: 'rgba(245,165,0,.05)',
+              border: '1.3px solid rgba(59,130,246,.45)',
+              background: 'rgba(59,130,246,.05)',
               boxShadow: `
-                0 0 12px rgba(245,165,0,.12),
+                0 0 12px rgba(59,130,246,.12),
                 inset 0 1px 0 rgba(255,255,255,.04)
               `,
             }}
@@ -88,27 +88,27 @@ export default function TopBar() {
                 width: 22,
                 height: 22,
                 borderRadius: '50%',
-                background: 'rgba(245,165,0,.15)',
+                background: 'rgba(59,130,246,.15)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexShrink: 0,
               }}
             >
-              <Zap className="w-[12px] h-[12px] text-[#F5A500] fill-[#F5A500]" />
+              <Zap className="w-[12px] h-[12px] text-[#3B82F6] fill-[#3B82F6]" />
             </div>
 
             {/* LVL + XP stacked */}
             <div className="flex flex-col" style={{ lineHeight: 1, gap: 2 }}>
               <span
-                className="font-mono font-bold text-[#F5A500] whitespace-nowrap"
+                className="font-mono font-bold text-[#3B82F6] whitespace-nowrap"
                 style={{ fontSize: 11, letterSpacing: '.04em' }}
               >
                 LVL {level}
               </span>
               <span
                 className="font-mono font-bold whitespace-nowrap"
-                style={{ fontSize: 8.5, letterSpacing: '.04em', color: 'rgba(245,165,0,.55)' }}
+                style={{ fontSize: 8.5, letterSpacing: '.04em', color: 'rgba(59,130,246,.55)' }}
               >
                 {xpFormatted} XP
               </span>

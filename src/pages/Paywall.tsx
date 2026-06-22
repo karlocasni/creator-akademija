@@ -30,7 +30,7 @@ export default function Paywall() {
 
       {/* Main Container */}
       <main className="flex-1 flex items-center justify-center p-6 relative z-10 my-8">
-        <div className="w-full max-w-md glass border border-primary/20 rounded-[2.5rem] p-8 md:p-10 shadow-[0_0_50px_rgba(245,165,0,0.15)] flex flex-col animate-in fade-in zoom-in-95 duration-500">
+        <div className="w-full max-w-md glass border border-primary/20 rounded-[2.5rem] p-8 md:p-10 shadow-[0_0_50px_rgba(59,130,246,0.15)] flex flex-col animate-in fade-in zoom-in-95 duration-500">
           
           {/* Badge */}
           <div className="mx-auto mb-6 inline-flex items-center gap-1.5 px-4.5 py-1.5 rounded-full bg-primary/10 border border-primary/20 backdrop-blur-md animate-pulse">

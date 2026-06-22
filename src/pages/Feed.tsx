@@ -299,7 +299,7 @@ function InstagramPostCard({ post, onBack }: InstagramPostCardProps) {
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-              className="fixed inset-x-0 bottom-0 bg-[#111116] border-t border-white/10 rounded-t-[30px] z-[201] p-6 pt-4 pb-[calc(16px+env(safe-area-inset-bottom))] shadow-2xl flex flex-col h-[75vh]"
+              className="fixed inset-x-0 bottom-0 bg-[#151E30] border-t border-white/10 rounded-t-[30px] z-[201] p-6 pt-4 pb-[calc(16px+env(safe-area-inset-bottom))] shadow-2xl flex flex-col h-[75vh]"
             >
               <div className="w-12 h-1 bg-white/10 rounded-full mx-auto mb-4 cursor-pointer" onClick={() => setShowComments(false)} />
               <div className="flex items-center justify-between mb-4 pb-2 border-b border-white/5">
@@ -346,7 +346,13 @@ export default function Feed() {
   useEffect(() => {
     const q = query(collection(db, 'challenges'));
     const unsub = onSnapshot(q, (snap) => {
-      setChallenges(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      if (snap.empty) {
+        import('../lib/firebase-mock').then(({ SEED_CHALLENGES }) => {
+          setChallenges(SEED_CHALLENGES);
+        });
+      } else {
+        setChallenges(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }
     }, (err) => {
       console.warn('[Feed] Challenges fetch error, using mock:', err);
       import('../lib/firebase-mock').then(({ SEED_CHALLENGES }) => {
@@ -366,7 +372,13 @@ export default function Feed() {
       limit(20),
     );
     const unsub = onSnapshot(q, (snap) => {
-      setActiveMembers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      if (snap.empty) {
+        import('../lib/firebase-mock').then(({ SEED_PROFILES }) => {
+          setActiveMembers(Object.values(SEED_PROFILES));
+        });
+      } else {
+        setActiveMembers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }
     }, (err) => {
       console.warn('[Feed] Active members fetch error, using mock:', err);
       import('../lib/firebase-mock').then(({ SEED_PROFILES }) => {
@@ -387,12 +399,22 @@ export default function Feed() {
     // Listen to upcoming events
     const q = query(collection(db, 'events'));
     const unsub = onSnapshot(q, (snap) => {
-      const allEvents = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const now = new Date();
-      now.setHours(0, 0, 0, 0); // start of today
-      const upcoming = allEvents.filter((e: any) => new Date(e.date) >= now);
-      upcoming.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      setUpcomingEvents(upcoming.slice(0, 3)); // show top 3 upcoming
+      if (snap.empty) {
+        import('../lib/firebase-mock').then(({ SEED_EVENTS }) => {
+          const now = new Date();
+          now.setHours(0, 0, 0, 0);
+          const upcoming = SEED_EVENTS.filter((e: any) => new Date(e.date) >= now);
+          upcoming.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          setUpcomingEvents(upcoming.slice(0, 3));
+        });
+      } else {
+        const allEvents = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const now = new Date();
+        now.setHours(0, 0, 0, 0); // start of today
+        const upcoming = allEvents.filter((e: any) => new Date(e.date) >= now);
+        upcoming.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        setUpcomingEvents(upcoming.slice(0, 3)); // show top 3 upcoming
+      }
     }, (err) => {
       console.warn('[Feed] Events fetch error, using mock:', err);
       import('../lib/firebase-mock').then(({ SEED_EVENTS }) => {
@@ -410,9 +432,17 @@ export default function Feed() {
     // Listen to profiles to extract creators
     const q = query(collection(db, 'profiles'));
     const unsub = onSnapshot(q, (snap) => {
-      const all = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const filtered = all.filter((p: any) => p.isCreator === true);
-      setCreators(filtered);
+      if (snap.empty) {
+        import('../lib/firebase-mock').then(({ SEED_PROFILES }) => {
+          const all = Object.values(SEED_PROFILES);
+          const filtered = all.filter((p: any) => p.isCreator === true);
+          setCreators(filtered);
+        });
+      } else {
+        const all = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const filtered = all.filter((p: any) => p.isCreator === true);
+        setCreators(filtered);
+      }
     }, (err) => {
       console.warn('[Feed] Creators fetch error, using mock:', err);
       import('../lib/firebase-mock').then(({ SEED_PROFILES }) => {
@@ -442,14 +472,26 @@ export default function Feed() {
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetched = snapshot.docs
-        .map((doc) => ({ id: doc.id, ...doc.data() } as FirestorePost))
-        .filter((post) => (post as any).status !== 'deleted');
-      setPosts(fetched);
-      lastDocRef.current = snapshot.docs[snapshot.docs.length - 1] ?? null;
-      setHasMore(snapshot.docs.length === PAGE_SIZE);
-      setLoading(false);
-      setError(null);
+      if (snapshot.empty) {
+        import('../lib/firebase-mock').then(({ SEED_POSTS }) => {
+          setPosts(SEED_POSTS as any[]);
+          setLoading(false);
+          setError(null);
+        }).catch((mockErr) => {
+          console.error('Fallback mock posts import failed:', mockErr);
+          setError('Greška pri učitavanju feed-a. Pokušaj ponovo.');
+          setLoading(false);
+        });
+      } else {
+        const fetched = snapshot.docs
+          .map((doc) => ({ id: doc.id, ...doc.data() } as FirestorePost))
+          .filter((post) => (post as any).status !== 'deleted');
+        setPosts(fetched);
+        lastDocRef.current = snapshot.docs[snapshot.docs.length - 1] ?? null;
+        setHasMore(snapshot.docs.length === PAGE_SIZE);
+        setLoading(false);
+        setError(null);
+      }
     }, (err) => {
       console.warn('Feed snapshot error, using mock posts fallback:', err.code, err.message);
       import('../lib/firebase-mock').then(({ SEED_POSTS }) => {
@@ -540,7 +582,7 @@ export default function Feed() {
           <div className="absolute top-0 inset-x-0 z-20 p-4 bg-gradient-to-b from-black/80 to-transparent flex justify-between items-center pt-[calc(env(safe-area-inset-top)+10px)]">
             <div className="flex flex-col">
               <span className="font-heading font-black text-white text-sm uppercase tracking-wider">REELS FEED</span>
-              <span className="text-[9px] text-[#F5A500] uppercase font-mono tracking-widest mt-0.5">CREATOR AKADEMIJA</span>
+              <span className="text-[9px] text-[#3B82F6] uppercase font-mono tracking-widest mt-0.5">CREATOR AKADEMIJA</span>
             </div>
             <button
               onClick={() => setFeedMode('standard')}
@@ -577,13 +619,13 @@ export default function Feed() {
             placeholder="Pretraži objave, mentore ili teme..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-[#111116]/80 border border-white/5 rounded-2xl py-3.5 pl-12 pr-4 text-sm focus:border-[#F5A500] focus:outline-none transition-colors text-white placeholder:text-[#8B8FA8]/50 shadow-xl"
+            className="w-full bg-[#151E30]/80 border border-white/5 rounded-2xl py-3.5 pl-12 pr-4 text-sm focus:border-[#3B82F6] focus:outline-none transition-colors text-white placeholder:text-[#8B8FA8]/50 shadow-xl"
           />
         </div>
         <button
           type="button"
           onClick={() => setFeedMode(prev => prev === 'standard' ? 'instagram' : 'standard')}
-          className="md:hidden px-4 bg-[#111116]/80 border border-white/5 rounded-2xl flex items-center justify-center text-[#8B8FA8] hover:text-[#F5A500] hover:border-[#F5A500]/50 transition-all shadow-xl shrink-0"
+          className="md:hidden px-4 bg-[#151E30]/80 border border-white/5 rounded-2xl flex items-center justify-center text-[#8B8FA8] hover:text-[#3B82F6] hover:border-[#3B82F6]/50 transition-all shadow-xl shrink-0"
           title="Instagram Fullscreen Mode"
         >
           <span className="material-symbols-outlined">
@@ -605,7 +647,7 @@ export default function Feed() {
                 <Link 
                   to={`/creator/${creator.id}`} 
                   key={creator.id}
-                  className="bg-[#111116] border border-white/5 rounded-2xl p-4 flex items-center gap-4 hover:border-[#F5A500]/50 transition-all cursor-pointer group"
+                  className="bg-[#151E30] border border-white/5 rounded-2xl p-4 flex items-center gap-4 hover:border-[#3B82F6]/50 transition-all cursor-pointer group"
                 >
                   <div className="w-12 h-12 rounded-full p-0.5 active-avatar shrink-0">
                     <img 
@@ -615,16 +657,16 @@ export default function Feed() {
                     />
                   </div>
                   <div className="flex-1 min-w-0 text-left">
-                    <h3 className="font-heading font-bold text-sm text-white group-hover:text-[#F5A500] transition-colors truncate">
+                    <h3 className="font-heading font-bold text-sm text-white group-hover:text-[#3B82F6] transition-colors truncate">
                       {creator.username}
                     </h3>
                     {creator.mainTopic && (
-                      <span className="text-[10px] font-bold text-[#F5A500] uppercase tracking-wider block mt-0.5">
+                      <span className="text-[10px] font-bold text-[#3B82F6] uppercase tracking-wider block mt-0.5">
                         {creator.mainTopic}
                       </span>
                     )}
                   </div>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-[#F5A500] transition-colors" />
+                  <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-[#3B82F6] transition-colors" />
                 </Link>
               );
             })}
@@ -653,7 +695,7 @@ export default function Feed() {
                       }}
                     />
                   </div>
-                  <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-[#0A0A0F] rounded-full"></div>
+                  <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-[#0E1420] rounded-full"></div>
                 </div>
                 <span className="mt-2 text-[11px] font-medium text-[#8B8FA8] truncate w-full text-center font-body">
                   {member.username}
@@ -675,26 +717,26 @@ export default function Feed() {
               <div 
                 key={event.id}
                 onClick={() => navigate(`/calendar?eventId=${event.id}`)}
-                className="bg-[#111116] border border-white/5 rounded-2xl p-4 flex flex-col justify-between hover:border-[#F5A500]/50 transition-all cursor-pointer group min-w-[260px] max-w-[260px] relative overflow-hidden"
+                className="bg-[#151E30] border border-white/5 rounded-2xl p-4 flex flex-col justify-between hover:border-[#3B82F6]/50 transition-all cursor-pointer group min-w-[260px] max-w-[260px] relative overflow-hidden"
               >
                 {event.bgImage && (
                   <>
                     <div className="absolute inset-0 bg-cover bg-center opacity-10 pointer-events-none" style={{ backgroundImage: `url(${event.bgImage})` }} />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#111116] to-transparent pointer-events-none" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#151E30] to-transparent pointer-events-none" />
                   </>
                 )}
                 <div className="relative z-10 text-left">
                   <div className="flex justify-between items-center mb-2">
                     <span className={cn(
                       "text-[8px] font-mono font-bold uppercase tracking-widest px-2 py-0.5 rounded-full",
-                      event.type === 'live_qa' ? 'bg-[#F5A500]/20 text-[#F5A500]' : 
+                      event.type === 'live_qa' ? 'bg-[#3B82F6]/20 text-[#3B82F6]' : 
                       event.type === 'guest_lecture' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-emerald-500/20 text-emerald-400'
                     )}>
                       {event.type === 'live_qa' ? 'Live Q&A' : event.type === 'guest_lecture' ? 'Gost' : 'Accountability'}
                     </span>
                     <span className="text-[10px] text-muted-foreground font-mono">{event.duration}</span>
                   </div>
-                  <h3 className="font-heading font-bold text-sm text-white group-hover:text-[#F5A500] transition-colors leading-snug truncate">
+                  <h3 className="font-heading font-bold text-sm text-white group-hover:text-[#3B82F6] transition-colors leading-snug truncate">
                     {event.title}
                   </h3>
                   <p className="text-[11px] text-[#8B8FA8] mt-1 line-clamp-2 leading-normal">
@@ -702,7 +744,7 @@ export default function Feed() {
                   </p>
                 </div>
                 <div className="flex items-center justify-between mt-4 border-t border-white/5 pt-2 relative z-10 text-left">
-                  <span className="text-[10px] font-bold text-[#F5A500]">
+                  <span className="text-[10px] font-bold text-[#3B82F6]">
                     {new Date(event.date).toLocaleDateString('hr-HR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}h
                   </span>
                   <span className="text-[9px] text-[#8B8FA8] truncate font-medium max-w-[100px]">
@@ -725,26 +767,26 @@ export default function Feed() {
           <div key={c.id} className="mx-[16px] mb-[18px] relative rounded-[18px] p-[16px] pl-[20px] overflow-hidden cursor-pointer"
             onClick={() => window.location.href = '/challenge'}
             style={{
-              background: 'linear-gradient(110deg, rgba(245,165,0,0.12), rgba(245,165,0,0.02) 60%), #111116',
-              border: '1px solid rgba(245,165,0,0.22)',
+              background: 'linear-gradient(110deg, rgba(59,130,246,0.12), rgba(59,130,246,0.02) 60%), #151E30',
+              border: '1px solid rgba(59,130,246,0.22)',
             }}
           >
             {/* Left accent bar */}
             <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-[18px]"
-              style={{ background: '#F5A500', boxShadow: '0 0 14px rgba(245,165,0,0.6)' }} />
+              style={{ background: '#3B82F6', boxShadow: '0 0 14px rgba(59,130,246,0.6)' }} />
             <div className="flex gap-[14px] items-start">
               <div className="w-[40px] h-[40px] rounded-[12px] flex items-center justify-center shrink-0"
-                style={{ background: 'rgba(245,165,0,0.15)' }}>
-                <Trophy className="w-5 h-5 text-[#F5A500]" />
+                style={{ background: 'rgba(59,130,246,0.15)' }}>
+                <Trophy className="w-5 h-5 text-[#3B82F6]" />
               </div>
               <div className="flex-1 min-w-0">
-                <span className="font-mono font-bold text-[9.5px] tracking-[0.2em] uppercase text-[#F5A500] block">Challenge Tjedna</span>
+                <span className="font-mono font-bold text-[9.5px] tracking-[0.2em] uppercase text-[#3B82F6] block">Challenge Tjedna</span>
                 <h3 className="font-heading font-bold text-[16.5px] text-white leading-[1.15] mt-[5px] mb-[3px]">{c.title}</h3>
                 <div className="flex items-center justify-between mt-2">
                   <p className="text-[12px] text-[#8B8FA8]">
                     {daysLeft > 0 ? `${daysLeft} dana do kraja` : 'Završava danas!'}
                   </p>
-                  <span className="text-[11px] font-mono font-bold text-[#F5A500] bg-[#F5A500]/10 px-3 py-1 rounded-full">
+                  <span className="text-[11px] font-mono font-bold text-[#3B82F6] bg-[#3B82F6]/10 px-3 py-1 rounded-full">
                     +{c.xpReward || 50} XP →
                   </span>
                 </div>

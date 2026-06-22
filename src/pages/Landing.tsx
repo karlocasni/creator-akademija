@@ -53,7 +53,7 @@ export default function Landing() {
             </button>
             <button
               onClick={() => openAuth('register')}
-              className="px-4 py-2.5 md:px-5 min-h-[44px] bg-primary text-black rounded-full font-black text-xs md:text-sm hover:scale-105 transition-transform tracking-wider uppercase shadow-md shadow-primary/20"
+              className="px-4 py-2.5 md:px-5 min-h-[44px] bg-primary text-white rounded-full font-black text-xs md:text-sm hover:scale-105 transition-transform tracking-wider uppercase shadow-md shadow-primary/20"
             >
               KRENI ODMAH
             </button>
@@ -118,7 +118,7 @@ export default function Landing() {
           >
             <button 
               onClick={() => openAuth('register')}
-              className="group w-full sm:w-auto px-8 py-4.5 bg-primary text-black rounded-2xl font-black text-base flex items-center justify-center gap-2 hover:scale-[1.03] active:scale-[0.98] transition-all shadow-[0_0_30px_rgba(246,168,69,0.25)]"
+              className="group w-full sm:w-auto px-8 py-4.5 bg-primary text-white rounded-2xl font-black text-base flex items-center justify-center gap-2 hover:scale-[1.03] active:scale-[0.98] transition-all shadow-[0_0_30px_rgba(59,130,246,0.25)]"
             >
               UPADNI U AKADEMIJU <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </button>
@@ -257,9 +257,9 @@ export default function Landing() {
           {/* Pricing Box Right */}
           <motion.div 
             {...fadeIn} 
-            className="glass p-8 md:p-10 rounded-[2.5rem] border-primary/20 shadow-[0_0_60px_rgba(246,168,69,0.1)] relative sticky top-28"
+            className="glass p-8 md:p-10 rounded-[2.5rem] border-primary/20 shadow-[0_0_60px_rgba(59,130,246,0.1)] relative sticky top-28"
           >
-            <div className="absolute top-0 right-0 bg-primary text-black px-6 py-1.5 font-black rotate-45 translate-x-8 translate-y-5 text-[10px] tracking-widest uppercase">
+            <div className="absolute top-0 right-0 bg-primary text-white px-6 py-1.5 font-black rotate-45 translate-x-8 translate-y-5 text-[10px] tracking-widest uppercase">
               100% PREMIUM
             </div>
 
@@ -274,7 +274,7 @@ export default function Landing() {
 
             <button 
               onClick={() => openAuth('register')}
-              className="w-full py-4.5 bg-primary text-black rounded-2xl font-black text-sm uppercase tracking-wider hover:scale-[1.02] active:scale-[0.98] transition-all shadow-md shadow-primary/20 mb-6"
+              className="w-full py-4.5 bg-primary text-white rounded-2xl font-black text-sm uppercase tracking-wider hover:scale-[1.02] active:scale-[0.98] transition-all shadow-md shadow-primary/20 mb-6"
             >
               Kupi i Pristupi Odmah
             </button>
@@ -305,7 +305,7 @@ export default function Landing() {
             NAŠ CURRICULUM OD 9 LEKCIJA
           </h2>
           <p className="text-xs text-muted-foreground mt-2 max-w-xl mx-auto leading-relaxed">
-            Započinjemo s 9 uvodnih lekcija koje ti daju sve temelje, a uskoro stiže <span className="text-primary font-black drop-shadow-[0_0_8px_rgba(245,165,0,0.6)] animate-pulse">još mnogo više od raznih vodećih kreatora s Balkana</span> kako bi uvijek pratio najnovije trendove!
+            Započinjemo s 9 uvodnih lekcija koje ti daju sve temelje, a uskoro stiže <span className="text-primary font-black drop-shadow-[0_0_8px_rgba(59,130,246,0.6)] animate-pulse">još mnogo više od raznih vodećih kreatora s Balkana</span> kako bi uvijek pratio najnovije trendove!
           </p>
         </motion.div>
 

@@ -923,6 +923,5 @@ export const storage = getStorage();
 export const functions = getFunctions();
 export const analytics = getAnalytics();
 
-// --- EXPORT SEED DATA FOR SEEDER ---
-export { SEED_PROFILES, SEED_COURSES, SEED_EVENTS, SEED_CHALLENGES, SEED_POSTS };
+export { SEED_PROFILES, SEED_COURSES, SEED_EVENTS, SEED_CHALLENGES, SEED_POSTS, SEED_HOOK_VAULT, SEED_CHALLENGE_SUBMISSIONS };
 

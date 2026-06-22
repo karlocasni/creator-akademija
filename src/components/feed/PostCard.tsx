@@ -225,7 +225,7 @@ export default function PostCard({ post }: PostCardProps) {
   return (
     <article
       className={cn(
-        'bg-[#111116] border border-[rgba(255,255,255,0.06)] rounded-[20px] overflow-hidden post-card flex flex-col',
+        'bg-[#151E30] border border-[rgba(255,255,255,0.06)] rounded-[20px] overflow-hidden post-card flex flex-col',
         deleting && 'opacity-50 grayscale pointer-events-none',
         cachedProfile?.isAdmin && 'admin-post'
       )}
@@ -248,12 +248,12 @@ export default function PostCard({ post }: PostCardProps) {
               <div className="flex items-center gap-[6px]">
                 <Link
                   to={profilePath}
-                  className="font-heading font-[700] text-[15px] text-[#FFFFFF] hover:text-[#F5A500] transition-colors leading-tight"
+                  className="font-heading font-[700] text-[15px] text-[#FFFFFF] hover:text-[#3B82F6] transition-colors leading-tight"
                 >
                   {currentName}
                 </Link>
                 {post.pinned && (
-                  <span className="inline-flex items-center gap-[2px] bg-[#F5A500]/20 text-[#F5A500] text-[10px] px-[6px] py-[2px] rounded font-bold">
+                  <span className="inline-flex items-center gap-[2px] bg-[#3B82F6]/20 text-[#3B82F6] text-[10px] px-[6px] py-[2px] rounded font-bold">
                     <Pin size={10} />
                   </span>
                 )}
@@ -280,11 +280,11 @@ export default function PostCard({ post }: PostCardProps) {
               {showOptions && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setShowOptions(false)} />
-                  <div className="absolute right-0 top-full mt-2 w-52 bg-[#1A1A22] border border-[rgba(255,255,255,0.06)] rounded-[16px] p-2 z-20 shadow-2xl animate-in fade-in slide-in-from-top-2">
+                  <div className="absolute right-0 top-full mt-2 w-52 bg-[#1D2A44] border border-[rgba(255,255,255,0.06)] rounded-[16px] p-2 z-20 shadow-2xl animate-in fade-in slide-in-from-top-2">
                     {profile?.isAdmin && (
                       <button
                         onClick={handleTogglePin}
-                        className="w-full text-left px-4 py-2 text-sm text-[#F5A500] hover:bg-[#F5A500]/10 rounded-xl transition-colors font-bold flex items-center gap-2"
+                        className="w-full text-left px-4 py-2 text-sm text-[#3B82F6] hover:bg-[#3B82F6]/10 rounded-xl transition-colors font-bold flex items-center gap-2"
                       >
                         <Pin className="w-3.5 h-3.5" />
                         {post.pinned ? 'Otkvači objavu' : 'Prikvači objavu'}
@@ -339,7 +339,7 @@ export default function PostCard({ post }: PostCardProps) {
           <div className="mt-4">
             <img
               src={post.imageUrl}
-              className="w-full max-h-[480px] rounded-[12px] object-contain bg-[#0A0A0F]"
+              className="w-full max-h-[480px] rounded-[12px] object-contain bg-[#0E1420]"
               loading="lazy"
               alt="Post slika"
             />
@@ -349,7 +349,7 @@ export default function PostCard({ post }: PostCardProps) {
           <div className="mt-4">
             <video
               src={`${post.videoUrl}#t=0.001`}
-              className="w-full max-h-[480px] rounded-[12px] bg-[#0A0A0F]"
+              className="w-full max-h-[480px] rounded-[12px] bg-[#0E1420]"
               controls
               playsInline
               preload="metadata"
@@ -368,7 +368,7 @@ export default function PostCard({ post }: PostCardProps) {
             disabled={!user || likeLoading}
             className={cn(
               'flex items-center gap-1.5 transition-colors duration-200 cursor-pointer disabled:opacity-50',
-              isLiked ? 'text-[#F5A500]' : 'text-[#8B8FA8] hover:text-[#F5A500]'
+              isLiked ? 'text-[#3B82F6]' : 'text-[#8B8FA8] hover:text-[#3B82F6]'
             )}
           >
             <Heart className={cn("w-4 h-4 transition-transform duration-200", isLiked && "fill-current scale-110")} />
@@ -379,7 +379,7 @@ export default function PostCard({ post }: PostCardProps) {
             onClick={() => setShowComments((prev) => !prev)}
             className={cn(
               'flex items-center gap-1.5 transition-colors duration-200 cursor-pointer',
-              showComments ? 'text-[#F5A500]' : 'text-[#8B8FA8] hover:text-[#F5A500]'
+              showComments ? 'text-[#3B82F6]' : 'text-[#8B8FA8] hover:text-[#3B82F6]'
             )}
           >
             <MessageSquare className="w-4 h-4" />
@@ -389,7 +389,7 @@ export default function PostCard({ post }: PostCardProps) {
 
         <button
           onClick={handleShare}
-          className="text-[#8B8FA8] hover:text-[#F5A500] transition-colors duration-200 cursor-pointer"
+          className="text-[#8B8FA8] hover:text-[#3B82F6] transition-colors duration-200 cursor-pointer"
         >
           <Share2 className="w-[18px] h-[18px]" />
         </button>
@@ -412,7 +412,7 @@ export default function PostCard({ post }: PostCardProps) {
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-              className="fixed inset-x-0 bottom-0 bg-[#111116] border-t border-white/10 rounded-t-[30px] z-[201] p-6 pt-4 pb-[calc(16px+env(safe-area-inset-bottom))] shadow-2xl flex flex-col max-h-[80vh] md:max-h-[600px] md:max-w-md md:mx-auto md:rounded-2xl md:bottom-12 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:border"
+              className="fixed inset-x-0 bottom-0 bg-[#151E30] border-t border-white/10 rounded-t-[30px] z-[201] p-6 pt-4 pb-[calc(16px+env(safe-area-inset-bottom))] shadow-2xl flex flex-col max-h-[80vh] md:max-h-[600px] md:max-w-md md:mx-auto md:rounded-2xl md:bottom-12 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:border"
             >
               {/* Drag Indicator Bar */}
               <div className="w-12 h-1 bg-white/10 rounded-full mx-auto mb-4 cursor-pointer hover:bg-white/20 transition-colors" onClick={() => setShowComments(false)} />

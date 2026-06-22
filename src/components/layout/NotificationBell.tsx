@@ -126,7 +126,7 @@ export default function NotificationBell() {
         <>
           {/* Mobile: full-width fixed panel */}
           <div className="md:hidden fixed left-0 right-0 top-0 z-[200] pt-[calc(env(safe-area-inset-top)+64px)] px-4">
-            <div className="rounded-2xl overflow-hidden" style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 32px rgba(0,0,0,0.9)' }}>
+            <div className="rounded-2xl overflow-hidden" style={{ background: '#151E30', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 32px rgba(0,0,0,0.9)' }}>
               <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
                 <span className="font-black text-xs uppercase tracking-widest text-white/50">Obavijesti</span>
                 <div className="flex items-center gap-3">
@@ -135,7 +135,7 @@ export default function NotificationBell() {
                       Obriši sve
                     </button>
                   )}
-                  <button onClick={() => setOpen(false)} className="w-7 h-7 rounded-full bg-[#F5A500]/10 border border-[#F5A500]/30 text-[#F5A500] flex items-center justify-center text-xs font-bold">✕</button>
+                  <button onClick={() => setOpen(false)} className="w-7 h-7 rounded-full bg-[#3B82F6]/10 border border-[#3B82F6]/30 text-[#3B82F6] flex items-center justify-center text-xs font-bold">✕</button>
                 </div>
               </div>
               <div className="max-h-[60vh] overflow-y-auto">
@@ -164,7 +164,7 @@ export default function NotificationBell() {
           <div className="md:hidden fixed inset-0 z-[199] bg-black/40" onClick={() => setOpen(false)} />
 
           {/* Desktop: right-aligned dropdown */}
-          <div className="hidden md:block absolute right-0 top-full mt-2 w-80 rounded-2xl z-[60] overflow-hidden" style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 32px rgba(0,0,0,0.8)' }}>
+          <div className="hidden md:block absolute right-0 top-full mt-2 w-80 rounded-2xl z-[60] overflow-hidden" style={{ background: '#151E30', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 32px rgba(0,0,0,0.8)' }}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
               <span className="font-black text-xs uppercase tracking-widest text-muted-foreground">Obavijesti</span>
               {notifications.length > 0 && (

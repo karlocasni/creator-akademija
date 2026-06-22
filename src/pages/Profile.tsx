@@ -336,7 +336,7 @@ export default function Profile() {
           {viewedProfile?.isCreator && (
             <Link
               to={`/creator/${viewedProfile.uid || paramId}`}
-              className="mt-4 px-6 py-2.5 bg-primary text-black rounded-full font-heading font-bold text-xs uppercase tracking-wider hover:scale-105 active:scale-95 transition-all shadow-[0_0_15px_rgba(245,165,0,0.3)]"
+              className="mt-4 px-6 py-2.5 bg-[#3B82F6] text-white rounded-full font-heading font-bold text-xs uppercase tracking-wider hover:scale-105 active:scale-95 transition-all shadow-[0_0_15px_rgba(59,130,246,0.3)]"
             >
               POGLEDAJ STRANICU MENTORA
             </Link>
@@ -344,9 +344,9 @@ export default function Profile() {
 
           {/* Streak badge — only own profile */}
           {isOwnProfile && streak > 0 && (
-            <div className="flex items-center gap-2 mt-3 px-4 py-2 rounded-full bg-[rgba(245,165,0,0.1)] border border-[rgba(245,165,0,0.2)]">
-              <Flame className="w-4 h-4 text-[#F5A500]" />
-              <span className="font-mono font-bold text-[13px] text-[#F5A500]">
+            <div className="flex items-center gap-2 mt-3 px-4 py-2 rounded-full bg-[rgba(59,130,246,0.1)] border border-[rgba(59,130,246,0.2)]">
+              <Flame className="w-4 h-4 text-[#3B82F6]" />
+              <span className="font-mono font-bold text-[13px] text-[#3B82F6]">
                 {streak} {streak === 1 ? 'tjedan' : streak < 5 ? 'tjedna' : 'tjedana'} zaredom
               </span>
             </div>
@@ -385,7 +385,7 @@ export default function Profile() {
 
         {/* TAB BAR — own profile only */}
         {isOwnProfile && (
-          <div className="flex gap-1 p-1 bg-[#111116] rounded-2xl border border-[rgba(255,255,255,0.06)]">
+          <div className="flex gap-1 p-1 bg-[#151E30] rounded-2xl border border-[rgba(255,255,255,0.06)]">
             {([
               { key: 'profil', label: 'Profil' },
               { key: 'rang-lista', label: 'Rang Lista' },
@@ -397,7 +397,7 @@ export default function Profile() {
                 onClick={() => setActiveTab(tab.key)}
                 className={`flex-1 py-2.5 rounded-xl text-[13px] font-bold transition-all ${
                   activeTab === tab.key
-                    ? 'bg-[#F5A500] text-[#0A0A0F]'
+                    ? 'bg-[#3B82F6] text-white'
                     : 'text-[#8B8FA8] hover:text-white'
                 }`}
               >
@@ -696,8 +696,8 @@ export default function Profile() {
             {/* Streak card */}
             <div className="ursa-card p-6">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-full bg-[rgba(245,165,0,0.1)] flex items-center justify-center">
-                  <Flame className="w-5 h-5 text-[#F5A500]" />
+                <div className="w-10 h-10 rounded-full bg-[rgba(59,130,246,0.1)] flex items-center justify-center">
+                  <Flame className="w-5 h-5 text-[#3B82F6]" />
                 </div>
                 <div>
                   <h3 className="font-heading font-[800] text-[18px] text-white uppercase">Streak</h3>
@@ -706,10 +706,10 @@ export default function Profile() {
               </div>
 
               {streak > 0 ? (
-                <div className="flex items-center gap-3 p-4 bg-[rgba(245,165,0,0.08)] rounded-2xl border border-[rgba(245,165,0,0.2)]">
+                <div className="flex items-center gap-3 p-4 bg-[rgba(59,130,246,0.08)] rounded-2xl border border-[rgba(59,130,246,0.2)]">
                   <span className="text-[36px]">🔥</span>
                   <div>
-                    <p className="font-mono font-bold text-[28px] text-[#F5A500] leading-none">{streak}</p>
+                    <p className="font-mono font-bold text-[28px] text-[#3B82F6] leading-none">{streak}</p>
                     <p className="font-sans text-[13px] text-[#8B8FA8] mt-1">
                       {streak === 1 ? 'tjedan zaredom' : streak < 5 ? 'tjedna zaredom' : 'tjedana zaredom'}
                     </p>
@@ -725,8 +725,8 @@ export default function Profile() {
             {/* Weekly goal card */}
             <div className="ursa-card p-6">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-full bg-[rgba(245,165,0,0.1)] flex items-center justify-center">
-                  <Target className="w-5 h-5 text-[#F5A500]" />
+                <div className="w-10 h-10 rounded-full bg-[rgba(59,130,246,0.1)] flex items-center justify-center">
+                  <Target className="w-5 h-5 text-[#3B82F6]" />
                 </div>
                 <div>
                   <h3 className="font-heading font-[800] text-[18px] text-white uppercase">Tjedni Cilj</h3>
@@ -743,7 +743,7 @@ export default function Profile() {
                     disabled={savingGoal}
                     className={`flex-1 py-2.5 rounded-full font-mono font-bold text-[15px] transition-all ${
                       weeklyGoal === g
-                        ? 'bg-[#F5A500] text-[#0A0A0F] shadow-[0_0_16px_rgba(245,165,0,0.4)]'
+                        ? 'bg-[#3B82F6] text-white shadow-[0_0_16px_rgba(59,130,246,0.4)]'
                         : 'bg-[rgba(255,255,255,0.05)] text-[#8B8FA8] hover:bg-[rgba(255,255,255,0.1)]'
                     }`}
                   >
@@ -771,10 +771,10 @@ export default function Profile() {
                       width: `${Math.min(100, (weeklyPostCount / weeklyGoal) * 100)}%`,
                       background: goalMet
                         ? 'linear-gradient(90deg, #22C55E, #4ADE80)'
-                        : 'linear-gradient(90deg, #F5A500, #FFB800)',
+                        : 'linear-gradient(90deg, #3B82F6, #2563EB)',
                       boxShadow: goalMet
                         ? '0 0 12px rgba(34,197,94,0.5)'
-                        : '0 0 12px rgba(245,165,0,0.5)',
+                        : '0 0 12px rgba(59,130,246,0.5)',
                     }}
                   />
                 </div>
@@ -785,7 +785,7 @@ export default function Profile() {
             <div className="grid grid-cols-2 gap-4">
               <div className="ursa-card p-5 flex flex-col items-center text-center">
                 <span className="text-[10px] font-mono text-[#4A4A5A] uppercase tracking-widest mb-1">Ukupni XP</span>
-                <span className="text-[24px] font-mono font-bold text-[#F5A500]">{(myProfile?.xp ?? 0).toLocaleString()}</span>
+                <span className="text-[24px] font-mono font-bold text-[#3B82F6]">{(myProfile?.xp ?? 0).toLocaleString()}</span>
               </div>
               <div className="ursa-card p-5 flex flex-col items-center text-center">
                 <span className="text-[10px] font-mono text-[#4A4A5A] uppercase tracking-widest mb-1">Razina</span>
@@ -810,12 +810,12 @@ export default function Profile() {
                   onClick={() => setSavedSubTab(sub.key)}
                   className={`flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-bold transition-all ${
                     savedSubTab === sub.key
-                      ? 'bg-[#F5A500] text-[#0A0A0F]'
+                      ? 'bg-[#3B82F6] text-white'
                       : 'bg-[rgba(255,255,255,0.05)] text-[#8B8FA8] hover:text-white'
                   }`}
                 >
                   {sub.label}
-                  <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-mono ${savedSubTab === sub.key ? 'bg-[#0A0A0F]/20' : 'bg-[rgba(255,255,255,0.1)]'}`}>
+                  <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-mono ${savedSubTab === sub.key ? 'bg-black/20' : 'bg-[rgba(255,255,255,0.1)]'}`}>
                     {sub.count}
                   </span>
                 </button>
@@ -833,7 +833,7 @@ export default function Profile() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-2 flex-wrap">
-                            <span className="px-2 py-0.5 bg-[#F5A500]/10 text-[#F5A500] rounded-full font-mono text-[10px] font-bold uppercase">{idea.nisa}</span>
+                            <span className="px-2 py-0.5 bg-[#3B82F6]/10 text-[#3B82F6] rounded-full font-mono text-[10px] font-bold uppercase">{idea.nisa}</span>
                             <span className="px-2 py-0.5 bg-[rgba(255,255,255,0.05)] text-[#8B8FA8] rounded-full text-[10px]">{idea.platforma}</span>
                           </div>
                           <p className="font-heading font-bold text-[15px] text-white leading-snug">"{idea.hook}"</p>
