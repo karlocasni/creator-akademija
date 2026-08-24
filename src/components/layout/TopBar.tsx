@@ -1,11 +1,11 @@
 import { Link } from 'react-router-dom';
-import { Zap } from 'lucide-react';
+import { Zap, ShieldCheck, Eye } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 import { useAuth } from '../../contexts/AuthContext';
 import { calculateLevel } from '../../lib/xp';
 
 export default function TopBar() {
-  const { profile } = useAuth();
+  const { profile, isActualAdmin, adminMode, toggleAdminRole } = useAuth();
   const xp    = profile?.xp    ?? 0;
   const level = profile?.level ?? calculateLevel(xp);
   const xpFormatted = xp.toLocaleString('hr-HR');
@@ -64,8 +64,42 @@ export default function TopBar() {
         </div>
       </Link>
 
-      {/* ── Right: XP pill + bell ── */}
-      <div className="relative z-10 flex items-center gap-[10px]">
+      {/* ── Right: Admin Switcher + XP pill + bell ── */}
+      <div className="relative z-10 flex items-center gap-[8px] sm:gap-[10px]">
+
+        {/* Admin / Student Role Switcher Toggle */}
+        {isActualAdmin && (
+          <button
+            type="button"
+            onClick={toggleAdminRole}
+            title={adminMode 
+              ? "Trenutno ste u Admin modu. Kliknite za prebacivanje na prikaz običnog korisnika (studenta)." 
+              : "Trenutno ste u prikazu studenta. Kliknite za povratak na Admin mod."}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all duration-200 cursor-pointer select-none active:scale-95 shadow-md ${
+              adminMode
+                ? 'bg-amber-500/15 border border-amber-500/40 text-amber-300 hover:bg-amber-500/25 hover:border-amber-400'
+                : 'bg-emerald-500/20 border border-emerald-500/60 text-emerald-300 hover:bg-emerald-500/30 hover:border-emerald-400 animate-pulse ring-1 ring-emerald-500/30'
+            }`}
+          >
+            {adminMode ? (
+              <>
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="hidden xs:inline">Admin</span>
+                <span className="text-[8.5px] px-1 py-0.2 rounded font-mono bg-amber-400/20 text-amber-200 border border-amber-400/30">
+                  ON
+                </span>
+              </>
+            ) : (
+              <>
+                <Eye className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span className="font-bold">Student</span>
+                <span className="hidden sm:inline text-[8.5px] px-1 py-0.2 rounded font-mono bg-emerald-400/20 text-emerald-200 border border-emerald-400/30">
+                  Vrati Admin
+                </span>
+              </>
+            )}
+          </button>
+        )}
 
         {/* LVL / XP pill */}
         <Link to="/profile">

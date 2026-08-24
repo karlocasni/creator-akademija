@@ -130,6 +130,7 @@ function AppRoutes() {
                   <Route path="/tools/video-ideas" element={<VideoIdeaGenerator />} />
                   <Route path="/tools/hook-vault" element={<HookVault />} />
                   <Route path="/challenge" element={<Challenge />} />
+                  <Route path="/izazovi" element={<Navigate to="/challenge" replace />} />
                   <Route path="/calendar" element={<Calendar />} />
                   
                   <Route path="/profile" element={<Profile />} />

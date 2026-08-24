@@ -61,3 +61,69 @@ export async function createMentionNotifications(
     }),
   );
 }
+
+export async function sendBroadcastNotification(data: {
+  senderId: string;
+  senderName: string;
+  senderAvatar: string;
+  type: FirestoreNotification['type'];
+  message: string;
+  link?: string;
+  postId?: string | null;
+}): Promise<void> {
+  try {
+    const profilesSnap = await getDocs(collection(db, 'profiles'));
+    const promises: Promise<any>[] = [];
+    if (!profilesSnap.empty) {
+      profilesSnap.forEach((pDoc) => {
+        promises.push(
+          addDoc(collection(db, 'notifications'), {
+            recipientId: pDoc.id,
+            senderId: data.senderId,
+            senderName: data.senderName,
+            senderAvatar: data.senderAvatar,
+            type: data.type,
+            message: data.message,
+            link: data.link || null,
+            postId: data.postId || null,
+            read: false,
+            createdAt: serverTimestamp(),
+          })
+        );
+      });
+    }
+
+    // Also write a general broadcast entry with recipientId 'all'
+    promises.push(
+      addDoc(collection(db, 'notifications'), {
+        recipientId: 'all',
+        senderId: data.senderId,
+        senderName: data.senderName,
+        senderAvatar: data.senderAvatar,
+        type: data.type,
+        message: data.message,
+        link: data.link || null,
+        postId: data.postId || null,
+        read: false,
+        createdAt: serverTimestamp(),
+      })
+    );
+
+    await Promise.all(promises);
+  } catch (err) {
+    console.warn('sendBroadcastNotification error:', err);
+    await addDoc(collection(db, 'notifications'), {
+      recipientId: 'all',
+      senderId: data.senderId,
+      senderName: data.senderName,
+      senderAvatar: data.senderAvatar,
+      type: data.type,
+      message: data.message,
+      link: data.link || null,
+      postId: data.postId || null,
+      read: false,
+      createdAt: serverTimestamp(),
+    });
+  }
+}
+

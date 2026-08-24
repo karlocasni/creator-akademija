@@ -6,9 +6,10 @@ export interface FirestoreNotification {
   senderId: string;
   senderName: string;
   senderAvatar: string;
-  type: 'mention' | 'new_lesson' | 'new_challenge' | 'new_training' | 'like' | 'comment';
+  type: 'mention' | 'new_lesson' | 'new_challenge' | 'new_training' | 'like' | 'comment' | 'challenge_winner' | 'general';
   message: string;
-  postId: string | null;
+  postId?: string | null;
+  link?: string | null;
   read: boolean;
   createdAt: Timestamp;
 }

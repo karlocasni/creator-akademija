@@ -45,8 +45,8 @@ export default function NotificationBell() {
     // Notifications are sorted client-side after fetch.
     const q = query(
       collection(db, 'notifications'),
-      where('recipientId', '==', user.uid),
-      limit(20),
+      where('recipientId', 'in', [user.uid, 'all']),
+      limit(30),
     );
 
     let unsub: (() => void) | undefined;
@@ -102,7 +102,11 @@ export default function NotificationBell() {
       updateDoc(doc(db, 'notifications', n.id), { read: true }).catch(() => {});
     }
     setOpen(false);
-    if (n.postId) {
+    if (n.link) {
+      navigate(n.link);
+    } else if (n.type === 'challenge_winner' || n.type === 'new_challenge') {
+      navigate('/challenge');
+    } else if (n.postId) {
       navigate('/feed');
     }
   };

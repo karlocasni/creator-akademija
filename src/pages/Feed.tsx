@@ -21,7 +21,6 @@ import { db } from '../lib/firebase';
 import { FirestorePost } from '../types/post';
 import PostCard from '../components/feed/PostCard';
 import CommentSection from '../components/feed/CommentSection';
-import CreatePost from '../components/feed/CreatePost';
 import SkeletonCard from '../components/ui/SkeletonCard';
 import CommunityTabs from '../components/layout/CommunityTabs';
 import { cn } from '../lib/utils';
@@ -338,7 +337,6 @@ export default function Feed() {
   const [isSearchOpen, setIsSearchOpen] = useState(searchParams.get('search') === 'true');
   const [searchQuery, setSearchQuery] = useState('');
   const [challenges, setChallenges] = useState<any[]>([]);
-  const [activeMembers, setActiveMembers] = useState<any[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<any[]>([]);
   const [creators, setCreators] = useState<any[]>([]);
   const lastDocRef = useRef<DocumentSnapshot | null>(null);
@@ -347,6 +345,13 @@ export default function Feed() {
     const q = query(collection(db, 'challenges'));
     const unsub = onSnapshot(q, (snap) => {
       if (snap.empty) {
+        const stored = localStorage.getItem('creator_mock_challenges');
+        if (stored) {
+          try {
+            setChallenges(JSON.parse(stored));
+            return;
+          } catch (_) {}
+        }
         import('../lib/firebase-mock').then(({ SEED_CHALLENGES }) => {
           setChallenges(SEED_CHALLENGES);
         });
@@ -355,34 +360,15 @@ export default function Feed() {
       }
     }, (err) => {
       console.warn('[Feed] Challenges fetch error, using mock:', err);
+      const stored = localStorage.getItem('creator_mock_challenges');
+      if (stored) {
+        try {
+          setChallenges(JSON.parse(stored));
+          return;
+        } catch (_) {}
+      }
       import('../lib/firebase-mock').then(({ SEED_CHALLENGES }) => {
         setChallenges(SEED_CHALLENGES);
-      });
-    });
-    return unsub;
-  }, []);
-
-  useEffect(() => {
-    // Active members = profiles where lastActiveAt is within the last 24 hours
-    const threshold = Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000));
-    const q = query(
-      collection(db, 'profiles'),
-      where('lastActiveAt', '>=', threshold),
-      orderBy('lastActiveAt', 'desc'),
-      limit(20),
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      if (snap.empty) {
-        import('../lib/firebase-mock').then(({ SEED_PROFILES }) => {
-          setActiveMembers(Object.values(SEED_PROFILES));
-        });
-      } else {
-        setActiveMembers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      }
-    }, (err) => {
-      console.warn('[Feed] Active members fetch error, using mock:', err);
-      import('../lib/firebase-mock').then(({ SEED_PROFILES }) => {
-        setActiveMembers(Object.values(SEED_PROFILES));
       });
     });
     return unsub;
@@ -674,37 +660,7 @@ export default function Feed() {
         </section>
       )}
 
-      {/* 3. ACTIVE MEMBERS ROW */}
-      <section className="py-2 mb-2 text-left">
-        <h2 className="px-4 mb-4 text-[11px] uppercase font-mono tracking-[0.1em] text-[#8B8FA8]" style={{ fontVariant: 'small-caps' }}>
-          Aktivni Danas
-        </h2>
-        <div className="flex gap-3 overflow-x-auto px-4 hide-scrollbar">
-          {activeMembers.map((member) => {
-            const avatarSrc = member.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${member.username}`;
-            return (
-              <Link to={`/profile/${member.id}`} key={member.id} className="flex flex-col items-center min-w-[60px] max-w-[60px]">
-                <div className="relative">
-                  <div className="w-14 h-14 rounded-full p-[2px] active-avatar">
-                    <img 
-                      src={avatarSrc} 
-                      alt={member.username} 
-                      className="w-full h-full rounded-full object-cover" 
-                      onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${member.username}`;
-                      }}
-                    />
-                  </div>
-                  <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-[#0E1420] rounded-full"></div>
-                </div>
-                <span className="mt-2 text-[11px] font-medium text-[#8B8FA8] truncate w-full text-center font-body">
-                  {member.username}
-                </span>
-              </Link>
-            );
-          })}
-        </div>
-      </section>
+
 
       {/* Nadolazeća Predavanja widget */}
       {upcomingEvents.length > 0 && !searchQuery && (
@@ -757,15 +713,13 @@ export default function Feed() {
         </section>
       )}
 
-      <CreatePost />
-
       {challenges.filter(c => c.active).map(c => {
         const daysLeft = c.deadline
           ? Math.max(0, Math.ceil((new Date(c.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
           : (c.daysRemaining ?? 0);
         return (
-          <div key={c.id} className="mx-[16px] mb-[18px] relative rounded-[18px] p-[16px] pl-[20px] overflow-hidden cursor-pointer"
-            onClick={() => window.location.href = '/challenge'}
+          <div key={c.id} className="mx-[16px] mb-[18px] relative rounded-[18px] p-[16px] pl-[20px] overflow-hidden cursor-pointer hover:scale-[1.01] transition-transform"
+            onClick={() => navigate('/challenge')}
             style={{
               background: 'linear-gradient(110deg, rgba(59,130,246,0.12), rgba(59,130,246,0.02) 60%), #151E30',
               border: '1px solid rgba(59,130,246,0.22)',

@@ -8,6 +8,9 @@ interface AuthContextType {
   user: User | null;
   profile: UserProfile | null;
   loading: boolean;
+  isActualAdmin: boolean;
+  adminMode: boolean;
+  toggleAdminRole: () => void;
   signOut: () => Promise<void>;
   updateLocalProfile: (updates: Partial<UserProfile>) => void;
 }
@@ -16,14 +19,29 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   profile: null,
   loading: true,
+  isActualAdmin: false,
+  adminMode: true,
+  toggleAdminRole: () => {},
   signOut: async () => {},
   updateLocalProfile: () => {},
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [rawProfile, setRawProfile] = useState<UserProfile | null>(null);
+  const [isActualAdmin, setIsActualAdmin] = useState<boolean>(false);
+  const [adminMode, setAdminMode] = useState<boolean>(() => {
+    return localStorage.getItem('creator_admin_mode') !== 'student';
+  });
   const [loading, setLoading] = useState(true);
+
+  const toggleAdminRole = () => {
+    setAdminMode((prev) => {
+      const next = !prev;
+      localStorage.setItem('creator_admin_mode', next ? 'admin' : 'student');
+      return next;
+    });
+  };
 
   useEffect(() => {
     // Listen to mock auth state changes
@@ -31,10 +49,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(firebaseUser);
 
       if (firebaseUser) {
-
         // Stamp the user as active right now so the active-members row is fresh
         setDoc(doc(db, 'profiles', firebaseUser.uid), { lastActiveAt: serverTimestamp() }, { merge: true })
           .catch(err => console.warn('[AuthContext] Failed to update lastActiveAt:', err));
+        
         const profileRef = doc(db, 'profiles', firebaseUser.uid);
         const unsubProfile = onSnapshot(profileRef, (snap) => {
           const isUserAdmin = firebaseUser.email === 'ismael.hadzic17@gmail.com' || 
@@ -43,7 +61,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                               (firebaseUser.displayName || '').toLowerCase().includes('ismael') || 
                               (firebaseUser.displayName || '').toLowerCase().includes('kreator student') ||
                               (firebaseUser.displayName || '').toLowerCase().includes('admin');
-                              
+          
+          setIsActualAdmin(Boolean(isUserAdmin || snap.data()?.isAdmin));
+
           if (snap.exists()) {
             const data = snap.data() as UserProfile;
             
@@ -54,7 +74,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               return;
             }
 
-            setProfile({ ...data, isAdmin: isUserAdmin });
+            setRawProfile({ ...data });
           } else {
             // Seed a default active profile
             const newProfile: UserProfile = {
@@ -67,7 +87,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               createdAt: new Date().toISOString(),
               isAdmin: isUserAdmin
             };
-            setProfile(newProfile);
+            setRawProfile(newProfile);
             setDoc(profileRef, newProfile, { merge: true }).catch(err => {
               console.warn('[AuthContext] Failed to write fallback profile:', err);
             });
@@ -79,6 +99,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                               firebaseUser.email === 'brunovujcec6@gmail.com' || 
                               (firebaseUser.email || '').toLowerCase().includes('admin') ||
                               (firebaseUser.displayName || '').toLowerCase().includes('admin');
+          setIsActualAdmin(Boolean(isUserAdmin));
           const fallbackProfile: UserProfile = {
             uid: firebaseUser.uid,
             username: firebaseUser.displayName || 'Kreator Student',
@@ -89,7 +110,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             createdAt: new Date().toISOString(),
             isAdmin: isUserAdmin
           };
-          setProfile(fallbackProfile);
+          setRawProfile(fallbackProfile);
           setLoading(false);
         });
 
@@ -97,7 +118,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           unsubProfile();
         };
       } else {
-        setProfile(null);
+        setRawProfile(null);
+        setIsActualAdmin(false);
         setLoading(false);
       }
     });
@@ -109,13 +131,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signOutUser = async () => {
     setUser(null);
-    setProfile(null);
+    setRawProfile(null);
+    setIsActualAdmin(false);
     await firebaseSignOut(auth);
   };
 
   const updateLocalProfile = (updates: Partial<UserProfile>) => {
-    if (!user || !profile) return;
-    const current = { ...profile, ...updates };
+    if (!user || !rawProfile) return;
+    const current = { ...rawProfile, ...updates };
     
     // Automatically calculate level based on XP (every 500 XP is 1 level)
     if (updates.xp !== undefined) {
@@ -126,11 +149,28 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setDoc(doc(db, 'profiles', user.uid), current, { merge: true });
   };
 
+  // Effective profile reflects current admin mode toggle
+  const effectiveProfile: UserProfile | null = rawProfile ? {
+    ...rawProfile,
+    isAdmin: isActualAdmin ? adminMode : false,
+    isCreator: isActualAdmin ? adminMode : Boolean(rawProfile.isCreator),
+  } : null;
+
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signOut: signOutUser, updateLocalProfile }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      profile: effectiveProfile, 
+      loading, 
+      isActualAdmin, 
+      adminMode, 
+      toggleAdminRole, 
+      signOut: signOutUser, 
+      updateLocalProfile 
+    }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
 export const useAuth = () => useContext(AuthContext);
+

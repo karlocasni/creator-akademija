@@ -9,7 +9,8 @@ export default function CommunityTabs() {
   const isCreator = profile?.isCreator === true;
 
   const tabs = [
-    { label: 'Creator Hub', path: '/feed' }
+    { label: 'Creator Hub', path: '/feed' },
+    { label: 'Izazovi', path: '/challenge' }
   ];
 
   if (isAdmin || isCreator) {
