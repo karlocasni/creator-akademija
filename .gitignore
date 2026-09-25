@@ -25,7 +25,9 @@ dist-ssr
 
 # Firebase
 .firebase
-.firebaserc
+# .firebaserc IS COMMITTED ON PURPOSE - it pins deploys to the creator-akademija
+# project. Without it, `firebase deploy` silently falls back to the Firebase CLI's
+# active project, which has previously sent deploys to projekt90app.
 # Do not ignore firebase.json or rules files
 node_modules
 functions/.env

@@ -1,7 +1,10 @@
 const admin = require("firebase-admin");
 
 admin.initializeApp({
-  credential: admin.credential.applicationDefault()
+  credential: admin.credential.applicationDefault(),
+  // Pinned explicitly: without projectId the Admin SDK resolves to the ambient
+  // credential's project, which risks writing to projekt90app.
+  projectId: "creator-akademija"
 });
 
 async function run() {
