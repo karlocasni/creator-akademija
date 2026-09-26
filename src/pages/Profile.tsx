@@ -11,6 +11,7 @@ import XPBadge from '../components/ui/XPBadge';
 import { UserProfile } from '../types/post';
 import { prepareImage, uploadMedia, mediaPath, deleteMediaByUrl, uploadErrorMessage, MB } from '../lib/media';
 import { toast, confirmDialog } from '../lib/dialog';
+import { LegalLinks } from '../components/legal/LegalPage';
 
 function parseFirestoreDate(val: unknown): Date | null {
   if (!val) return null;
@@ -1026,6 +1027,7 @@ export default function Profile() {
             >
               <LogOut className="w-5 h-5" /> ODJAVA
             </button>
+            <LegalLinks className="block text-center text-xs text-white/40 pt-2" />
           </div>
         )}
       </div>

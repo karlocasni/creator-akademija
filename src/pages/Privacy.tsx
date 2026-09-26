@@ -1,76 +1,30 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { getConsent, onConsentChange, resetConsent } from '../lib/consent';
-
-const UPDATED = '26. rujna 2026.';
-const INSTAGRAM_DM = 'https://ig.me/m/creator_akademija';
-
-function Section({ id, title, children }: { id: string; title: string; children: ReactNode }) {
-  return (
-    <section id={id} className="scroll-mt-6">
-      <h2 className="text-lg sm:text-xl font-bold text-white mt-10 mb-3">{title}</h2>
-      <div className="space-y-3 text-white/70 leading-relaxed text-[15px]">{children}</div>
-    </section>
-  );
-}
-
-function List({ items }: { items: ReactNode[] }) {
-  return (
-    <ul className="list-disc pl-5 space-y-1.5 marker:text-primary">
-      {items.map((item, i) => <li key={i}>{item}</li>)}
-    </ul>
-  );
-}
-
-const b = (text: string) => <strong className="text-white/90 font-semibold">{text}</strong>;
+import LegalPage, { Section, List, b, CompanyBlock, COMPANY, linkCls } from '../components/legal/LegalPage';
 
 export default function Privacy() {
-  const navigate = useNavigate();
   const [consent, setConsentState] = useState(getConsent);
 
   useEffect(() => onConsentChange(() => setConsentState(getConsent())), []);
 
-  useEffect(() => {
-    const prev = document.title;
-    document.title = 'Pravila privatnosti | Creator Akademija';
-    window.scrollTo(0, 0);
-    return () => { document.title = prev; };
-  }, []);
-
-  const goBack = () => (window.history.length > 1 ? navigate(-1) : navigate('/'));
-
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12 pb-32">
-        <button
-          onClick={goBack}
-          className="inline-flex items-center gap-2 text-sm text-white/60 hover:text-white transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" /> Natrag
-        </button>
-
-        <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white mt-6">Pravila privatnosti</h1>
-        <p className="text-sm text-white/45 mt-2">Zadnja izmjena: {UPDATED}</p>
-
-        <p className="text-white/70 leading-relaxed mt-6 text-[15px]">
+    <LegalPage
+      title="Pravila privatnosti"
+      updated="26. rujna 2026."
+      intro={
+        <p>
           Ova pravila objašnjavaju koje osobne podatke prikupljamo kada koristiš web stranicu i aplikaciju
           Creator Akademija (creator-akademija.web.app), zašto ih prikupljamo, s kim ih dijelimo i koja su tvoja
           prava. Podatke obrađujemo u skladu s Općom uredbom o zaštiti podataka (GDPR) i Zakonom o provedbi
           Opće uredbe o zaštiti podataka.
         </p>
-
+      }
+    >
         <Section id="voditelj" title="1. Tko je voditelj obrade">
+          <CompanyBlock />
           <p>
-            {b('GRIZLI GANG d.o.o. za marketing i usluge')}<br />
-            Malešnica 27, 10000 Zagreb, Hrvatska<br />
-            OIB: 59878531102
-          </p>
-          <p>
-            Za sva pitanja o privatnosti i ostvarivanje svojih prava javi nam se porukom na Instagramu{' '}
-            <a href={INSTAGRAM_DM} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">
-              @creator_akademija
-            </a>{' '}
+            Za sva pitanja o privatnosti i ostvarivanje svojih prava piši nam na{' '}
+            <a href={`mailto:${COMPANY.email}`} className={linkCls}>{COMPANY.email}</a>, porukom na Instagramu
             ili pisanim putem na gornju adresu.
           </p>
         </Section>
@@ -190,7 +144,6 @@ export default function Privacy() {
             promjenama obavijestit ćemo te u aplikaciji.
           </p>
         </Section>
-      </div>
-    </div>
+    </LegalPage>
   );
 }

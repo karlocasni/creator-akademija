@@ -27,6 +27,7 @@ const CreatorPage = lazy(() => import('./pages/CreatorPage'));
 const Submissions = lazy(() => import('./pages/Submissions'));
 const Paywall = lazy(() => import('./pages/Paywall'));
 const Privacy = lazy(() => import('./pages/Privacy'));
+const Terms = lazy(() => import('./pages/Terms'));
 
 function AppRoutes() {
   const { user, profile, loading, isActualAdmin } = useAuth();
@@ -54,11 +55,11 @@ function AppRoutes() {
 
   const direction = state.direction;
 
-  // The privacy policy is public: logged out, waiting for activation or inside the app
-  if (location.pathname === '/privatnost') {
+  // Legal pages are public: logged out, waiting for activation or inside the app
+  if (location.pathname === '/privatnost' || location.pathname === '/uvjeti') {
     return (
       <Suspense fallback={<div className="min-h-screen bg-background" />}>
-        <Privacy />
+        {location.pathname === '/uvjeti' ? <Terms /> : <Privacy />}
       </Suspense>
     );
   }

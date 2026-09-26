@@ -432,7 +432,11 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
 
           {isRegister && (
             <p className="text-xs text-white/45 text-center leading-relaxed">
-              Registracijom potvrđuješ da imaš barem 16 godina ili suglasnost roditelja te da si pročitao/la{' '}
+              Registracijom prihvaćaš{' '}
+              <a href="/uvjeti" target="_blank" rel="noopener" className="text-primary underline underline-offset-2">
+                Uvjete korištenja
+              </a>{' '}
+              i potvrđuješ da imaš barem 16 godina ili suglasnost roditelja te da si pročitao/la{' '}
               <a href="/privatnost" target="_blank" rel="noopener" className="text-primary underline underline-offset-2">
                 Pravila privatnosti
               </a>.

@@ -10,6 +10,7 @@ import AuthModal from '../components/auth/AuthModal';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { COURSE_LESSONS } from '../data/courseLessons';
+import { LegalLinks } from '../components/legal/LegalPage';
 
 const INTRO_VIDEO = '/media/intro.mp4';
 const INTRO_POSTER = '/media/intro-poster.jpg';
@@ -686,8 +687,7 @@ export default function Landing() {
           </div>
         </div>
         <p className="max-w-6xl mx-auto text-center md:text-left text-xs text-white/35 mt-10">
-          © {new Date().getFullYear()} Creator Akademija · GRIZLI GANG d.o.o. Sva prava pridržana. ·{' '}
-          <Link to="/privatnost" className="underline underline-offset-2 hover:text-white/70 transition-colors">Pravila privatnosti</Link>
+          © {new Date().getFullYear()} Creator Akademija · GRIZLI GANG d.o.o. Sva prava pridržana. · <LegalLinks />
         </p>
       </footer>
     </div>

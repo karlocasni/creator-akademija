@@ -1,5 +1,6 @@
 import { useAuth } from '../contexts/AuthContext';
 import { CheckCircle2, LogOut, Sparkles, Clock, Instagram } from 'lucide-react';
+import { LegalLinks } from '../components/legal/LegalPage';
 
 // Payments are not integrated yet: a new account waits here until an admin
 // activates it on the Members page. The profile listener in AuthContext lets
@@ -90,7 +91,7 @@ export default function Paywall() {
       </main>
 
       <footer className="w-full py-6 px-8 text-center text-[10px] text-muted-foreground border-t border-white/5 relative z-10 bg-background/30 backdrop-blur-sm">
-        <p>© {new Date().getFullYear()} Creator Akademija</p>
+        <p>© {new Date().getFullYear()} Creator Akademija · <LegalLinks /></p>
       </footer>
     </div>
   );
