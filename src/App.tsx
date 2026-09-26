@@ -7,6 +7,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { UploadProvider } from './contexts/UploadContext';
 import UploadToast from './components/ui/UploadToast';
 import { DialogHost } from './lib/dialog';
+import CookieBanner from './components/CookieBanner';
 
 const AppShell = lazy(() => import('./components/layout/AppShell'));
 const Feed = lazy(() => import('./pages/Feed'));
@@ -25,6 +26,7 @@ const Members = lazy(() => import('./pages/Members'));
 const CreatorPage = lazy(() => import('./pages/CreatorPage'));
 const Submissions = lazy(() => import('./pages/Submissions'));
 const Paywall = lazy(() => import('./pages/Paywall'));
+const Privacy = lazy(() => import('./pages/Privacy'));
 
 function AppRoutes() {
   const { user, profile, loading, isActualAdmin } = useAuth();
@@ -51,6 +53,15 @@ function AppRoutes() {
   }
 
   const direction = state.direction;
+
+  // The privacy policy is public: logged out, waiting for activation or inside the app
+  if (location.pathname === '/privatnost') {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-background" />}>
+        <Privacy />
+      </Suspense>
+    );
+  }
 
   if (loading) {
     return (
@@ -161,6 +172,7 @@ function App() {
       <AppRoutes />
       <UploadToast />
       <DialogHost />
+      <CookieBanner />
     </UploadProvider>
   );
 }

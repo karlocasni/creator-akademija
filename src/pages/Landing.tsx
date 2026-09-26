@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import AuthModal from '../components/auth/AuthModal';
 import { useAuth } from '../contexts/AuthContext';
@@ -209,6 +210,10 @@ function DiscordWaitlist() {
         {status === 'sending' ? <Loader2 className="w-4 h-4 animate-spin" /> : <DiscordIcon className="w-5 h-5" />}
         Prijavi se
       </button>
+      <p className="text-[11px] text-white/40 text-center leading-relaxed">
+        Podatke koristimo samo da te obavijestimo o otvaranju Discorda.{' '}
+        <Link to="/privatnost" className="underline underline-offset-2 hover:text-white/70">Pravila privatnosti</Link>
+      </p>
       {status === 'error' && (
         <p className="text-xs text-red-400 text-center">Prijava nije uspjela. Provjeri podatke i pokušaj ponovno.</p>
       )}
@@ -681,7 +686,8 @@ export default function Landing() {
           </div>
         </div>
         <p className="max-w-6xl mx-auto text-center md:text-left text-xs text-white/35 mt-10">
-          © {new Date().getFullYear()} Creator Akademija. Sva prava pridržana.
+          © {new Date().getFullYear()} Creator Akademija · GRIZLI GANG d.o.o. Sva prava pridržana. ·{' '}
+          <Link to="/privatnost" className="underline underline-offset-2 hover:text-white/70 transition-colors">Pravila privatnosti</Link>
         </p>
       </footer>
     </div>

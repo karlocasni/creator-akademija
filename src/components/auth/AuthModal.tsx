@@ -13,6 +13,7 @@ import {
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useAuth, isAccessExpired } from '../../contexts/AuthContext';
 import { isAdminEmail } from '../../lib/admin';
+import { trackPixel } from '../../lib/consent';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -170,6 +171,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
       });
       await sendEmailVerification(user);
       await signOut(auth);
+      trackPixel('Lead');
 
       setMode('login');
       setPassword('');
@@ -426,14 +428,18 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
             </div>
           )}
 
+          {isRegister && (
+            <p className="text-xs text-white/45 text-center leading-relaxed">
+              Registracijom potvrđuješ da imaš barem 16 godina ili suglasnost roditelja te da si pročitao/la{' '}
+              <a href="/privatnost" target="_blank" rel="noopener" className="text-primary underline underline-offset-2">
+                Pravila privatnosti
+              </a>.
+            </p>
+          )}
+
           <button
             type="submit"
             disabled={loading}
-            onClick={() => {
-              if (isRegister && typeof (window as any).fbq === 'function') {
-                (window as any).fbq('track', 'Lead');
-              }
-            }}
             className="w-full py-4 bg-primary text-black rounded-2xl font-black text-lg hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:hover:scale-100 mt-2 flex items-center justify-center gap-2"
           >
             {loading ? 'OBRADA...' : isLogin ? 'PRIJAVI SE' : isRegister ? 'REGISTRIRAJ SE' : 'POŠALJI LINK'}
