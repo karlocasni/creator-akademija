@@ -13,21 +13,29 @@ export default function Messages() {
   const { chatId } = useParams<{ chatId?: string }>();
   const [chats, setChats] = useState<FirestoreChat[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
     const q = query(collection(db, 'chats'), where('participants', 'array-contains', user.uid));
     return onSnapshot(q, (snap) => {
-      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() } as FirestoreChat));
+      const data = snap.docs.map(
+        (d) => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) } as FirestoreChat),
+      );
       data.sort((a, b) => {
         const aMs = a.lastMessageTime instanceof Timestamp ? a.lastMessageTime.toMillis() : 0;
         const bMs = b.lastMessageTime instanceof Timestamp ? b.lastMessageTime.toMillis() : 0;
         return bMs - aMs;
       });
       setChats(data);
+      setError(null);
+      setLoading(false);
+    }, (err) => {
+      console.warn('[Messages] Chats snapshot error:', err.code);
+      setError('Poruke se nisu mogle učitati. Provjeri vezu i osvježi stranicu.');
       setLoading(false);
     });
-  }, [user]);
+  }, [user?.uid]);
 
   if (chatId) {
     return (
@@ -56,7 +64,13 @@ export default function Messages() {
         </div>
       )}
 
-      {!loading && chats.length === 0 && (
+      {!loading && error && (
+        <div className="ursa-card p-6 text-center border border-red-500/20">
+          <p className="text-red-400 text-sm">{error}</p>
+        </div>
+      )}
+
+      {!loading && !error && chats.length === 0 && (
         <div className="text-center py-20">
           <MessageCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
           <p className="text-muted-foreground font-semibold">Nema poruka</p>
@@ -68,11 +82,11 @@ export default function Messages() {
 
       <div className="space-y-2">
         {chats.map((chat) => {
-          const otherId = chat.participants.find((id) => id !== user?.uid) ?? '';
+          const otherId = chat.participants?.find((id) => id !== user?.uid) ?? '';
           const otherName = chat.participantNames?.[otherId] ?? 'Korisnik';
           const otherAvatar =
-            chat.participantAvatars?.[otherId] ??
-            `https://api.dicebear.com/7.x/avataaars/svg?seed=${otherName}`;
+            chat.participantAvatars?.[otherId] ||
+            `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(otherName)}`;
 
           return (
             <button
@@ -82,8 +96,10 @@ export default function Messages() {
             >
               <img
                 src={otherAvatar}
-                className="w-12 h-12 rounded-full flex-shrink-0 border border-white/10"
+                className="w-12 h-12 rounded-full flex-shrink-0 border border-white/10 object-cover"
                 alt={otherName}
+                loading="lazy"
+                decoding="async"
                 onError={(e) => {
                   (e.currentTarget as HTMLImageElement).src =
                     `https://api.dicebear.com/7.x/avataaars/svg?seed=${otherName}`;

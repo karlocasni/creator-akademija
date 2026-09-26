@@ -1,60 +1,44 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Link, useLocation, useSearchParams, useNavigate } from 'react-router-dom';
-import { Search, Bell, Send, RefreshCw, AlertCircle, Trophy, ChevronDown, ChevronRight, Play } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { Search, RefreshCw, AlertCircle, Trophy, ChevronDown, ChevronRight } from 'lucide-react';
 import {
   collection,
   query,
   orderBy,
   limit,
   onSnapshot,
-  startAfter,
   getDocs,
-  DocumentSnapshot,
-  doc,
-  setDoc,
-  serverTimestamp,
-  Timestamp,
   where,
-  deleteDoc,
+  QueryDocumentSnapshot,
+  DocumentData,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { FirestorePost } from '../types/post';
-import PostCard from '../components/feed/PostCard';
+import PostCard, { formatRelativeTime, dicebear, usePostLikes, togglePostLike, openDirectChat } from '../components/feed/PostCard';
 import CommentSection from '../components/feed/CommentSection';
 import SkeletonCard from '../components/ui/SkeletonCard';
 import CommunityTabs from '../components/layout/CommunityTabs';
 import { cn } from '../lib/utils';
+import { calculateLevel } from '../lib/xp';
+import { toast } from '../lib/dialog';
 import { useAuth } from '../contexts/AuthContext';
 import { AnimatePresence, motion } from 'framer-motion';
 
 const PAGE_SIZE = 10;
+const MAX_PINNED = 10;
 
-function formatRelativeTime(timestamp: Timestamp | null | undefined): string {
-  if (!timestamp) return '';
-  try {
-    const date = timestamp.toDate();
-    const diffMs = Date.now() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    if (diffMins < 1) return 'Upravo';
-    if (diffMins < 60) return `Prije ${diffMins} min`;
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) {
-      const label = diffHours === 1 ? 'sat' : diffHours < 5 ? 'sata' : 'sati';
-      return `Prije ${diffHours} ${label}`;
-    }
-    const diffDays = Math.floor(diffHours / 24);
-    return `Prije ${diffDays} ${diffDays === 1 ? 'dan' : 'dana'}`;
-  } catch {
-    return '';
-  }
-}
+const toPost = (d: QueryDocumentSnapshot<DocumentData>) =>
+  ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) } as FirestorePost);
+
+const notDeleted = (post: FirestorePost) => (post as { status?: string }).status !== 'deleted';
 
 interface InstagramPostCardProps {
   post: FirestorePost;
+  authorLevel?: number;
   onBack: () => void;
 }
 
-function InstagramPostCard({ post, onBack }: InstagramPostCardProps) {
+function InstagramPostCard({ post, authorLevel }: InstagramPostCardProps) {
   const { user, profile } = useAuth();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -63,46 +47,38 @@ function InstagramPostCard({ post, onBack }: InstagramPostCardProps) {
   const [likeLoading, setLikeLoading] = useState(false);
   const navigate = useNavigate();
 
-  // Real-time likes from subcollection posts/{postId}/likes
-  const [likeCount, setLikeCount] = useState(0);
-  const [isLiked, setIsLiked] = useState(false);
+  // Shared listener on posts/{postId}/likes (one per post, not per card)
+  const { likeCount, isLiked } = usePostLikes(post.id, user?.uid);
 
-  useEffect(() => {
-    const likesRef = collection(doc(db, 'posts', post.id), 'likes');
-    const unsub = onSnapshot(likesRef, (snap) => {
-      setLikeCount(snap.size);
-      setIsLiked(!!user && snap.docs.some(d => d.id === user.uid));
-    });
-    return unsub;
-  }, [post.id, user?.uid]);
+  const myName = profile?.username || 'Kreator';
+  const myAvatar = profile?.avatar_url || dicebear(myName);
 
+  // Autoplay (muted) while at least 60% visible. isPlaying follows the
+  // element's real play/pause events, so a blocked play() never shows "playing".
   useEffect(() => {
-    if (!videoRef.current) return;
+    const video = videoRef.current;
+    if (!video) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          videoRef.current?.play().catch(() => {});
-          setIsPlaying(true);
+          video.play().catch(() => { /* autoplay blocked — user can tap */ });
         } else {
-          videoRef.current?.pause();
-          setIsPlaying(false);
+          video.pause();
         }
       },
       { threshold: 0.6 }
     );
-    observer.observe(videoRef.current);
+    observer.observe(video);
     return () => observer.disconnect();
-  }, []);
+  }, [post.videoUrl]);
 
   const handleVideoTap = () => {
-    if (videoRef.current) {
-      if (isPlaying) {
-        videoRef.current.pause();
-        setIsPlaying(false);
-      } else {
-        videoRef.current.play().catch(() => {});
-        setIsPlaying(true);
-      }
+    const video = videoRef.current;
+    if (!video) return;
+    if (!video.paused) {
+      video.pause();
+    } else {
+      video.play().catch(() => {});
     }
   };
 
@@ -118,15 +94,18 @@ function InstagramPostCard({ post, onBack }: InstagramPostCardProps) {
     e.stopPropagation();
     if (!user || likeLoading) return;
     setLikeLoading(true);
-    const likeRef = doc(db, 'posts', post.id, 'likes', user.uid);
     try {
-      if (!isLiked) {
-        await setDoc(likeRef, { userId: user.uid, createdAt: serverTimestamp() });
-      } else {
-        await deleteDoc(likeRef);
-      }
+      await togglePostLike({
+        postId: post.id,
+        authorId: post.authorId,
+        uid: user.uid,
+        liked: isLiked,
+        senderName: myName,
+        senderAvatar: myAvatar,
+      });
     } catch (err) {
       console.error(err);
+      toast('Reakcija nije spremljena.', 'error');
     } finally {
       setLikeLoading(false);
     }
@@ -137,54 +116,66 @@ function InstagramPostCard({ post, onBack }: InstagramPostCardProps) {
     try {
       if (navigator.share) {
         await navigator.share({
-          title: 'Projekt90 Reels',
+          title: 'Creator Akademija',
           text: post.content,
           url: window.location.href,
         });
       } else {
         await navigator.clipboard.writeText(window.location.href);
-        alert('Kopirano u međuspremnik!');
+        toast('Kopirano u međuspremnik!', 'success');
       }
     } catch (err) {
-      console.warn(err);
+      if ((err as Error)?.name !== 'AbortError') console.warn(err);
     }
   };
 
   const initDM = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!user || !profile || user.uid === post.authorId) return;
-    const chatId = [user.uid, post.authorId].sort().join('_');
-    const myAvatar = profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`;
-    await setDoc(doc(db, 'chats', chatId), {
-      participants: [user.uid, post.authorId],
-      participantNames: { [user.uid]: profile.username, [post.authorId]: post.authorName },
-      participantAvatars: { [user.uid]: myAvatar, [post.authorId]: post.authorAvatar },
-      lastMessage: '',
-      lastMessageTime: serverTimestamp(),
-      lastMessageSenderId: '',
-    }, { merge: true });
-    navigate(`/messages/${chatId}`);
+    if (!user || user.uid === post.authorId) return;
+    try {
+      const chatId = await openDirectChat(
+        { uid: user.uid, name: myName, avatar: myAvatar },
+        { uid: post.authorId, name: post.authorName || 'Kreator', avatar: post.authorAvatar || dicebear(post.authorName) },
+      );
+      navigate(`/messages/${chatId}`);
+    } catch (err) {
+      console.error('Could not open chat:', err);
+      toast('Razgovor se ne može otvoriti. Pokušaj ponovno.', 'error');
+    }
   };
 
-  const avatarUrl = post.authorAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${post.authorName}`;
+  const avatarUrl = post.authorAvatar || dicebear(post.authorName);
 
   return (
     <div className="relative h-full w-full snap-start shrink-0 flex flex-col justify-end bg-black overflow-hidden select-none">
       {/* 1. Fullscreen Media Content */}
       <div className="absolute inset-0 z-0 flex items-center justify-center" onClick={handleVideoTap}>
         {post.videoUrl ? (
-          <video
-            ref={videoRef}
-            src={post.videoUrl}
-            loop
-            muted={isMuted}
-            playsInline
-            className="w-full h-full object-cover"
-          />
+          <>
+            <video
+              ref={videoRef}
+              src={post.videoUrl}
+              loop
+              muted={isMuted}
+              playsInline
+              preload="metadata"
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
+              aria-label={post.title || `Video koji je objavio/la ${post.authorName}`}
+              className="w-full h-full object-cover"
+            />
+            {!isPlaying && (
+              <span className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden>
+                <span className="material-symbols-outlined text-white/70 text-6xl drop-shadow-lg">play_arrow</span>
+              </span>
+            )}
+          </>
         ) : post.imageUrl ? (
           <img
             src={post.imageUrl}
-            alt=""
+            alt={post.title || `Slika koju je objavio/la ${post.authorName}`}
+            loading="lazy"
+            decoding="async"
             className="w-full h-full object-cover"
           />
         ) : (
@@ -204,6 +195,7 @@ function InstagramPostCard({ post, onBack }: InstagramPostCardProps) {
       {post.videoUrl && (
         <button
           onClick={toggleMute}
+          aria-label={isMuted ? 'Uključi zvuk' : 'Isključi zvuk'}
           className="absolute top-20 right-4 z-20 w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center border border-white/10 text-white/80"
         >
           <span className="material-symbols-outlined text-sm">
@@ -215,9 +207,11 @@ function InstagramPostCard({ post, onBack }: InstagramPostCardProps) {
       {/* 2. Overlaid Post Details (Left Side Bottom) */}
       <div className="absolute left-4 bottom-[calc(30px+env(safe-area-inset-bottom))] z-20 max-w-[70%] text-left flex flex-col gap-2 pointer-events-auto">
         <Link to={`/profile/${post.authorId}`} className="flex items-center gap-2 group">
-          <img src={avatarUrl} alt="" className="w-8 h-8 rounded-full border border-white/20" />
+          <img src={avatarUrl} alt={post.authorName} loading="lazy" decoding="async" className="w-8 h-8 rounded-full border border-white/20 object-cover" />
           <span className="font-heading font-black text-sm text-white hover:text-primary transition-colors">{post.authorName}</span>
-          <span className="text-[9px] bg-primary/20 text-primary font-bold px-2 py-0.5 rounded-full font-mono uppercase">LVL 1</span>
+          {authorLevel != null && (
+            <span className="text-[9px] bg-primary/20 text-primary font-bold px-2 py-0.5 rounded-full font-mono uppercase">LVL {authorLevel}</span>
+          )}
         </Link>
 
         {post.videoUrl || post.imageUrl ? (
@@ -238,9 +232,12 @@ function InstagramPostCard({ post, onBack }: InstagramPostCardProps) {
         <div className="flex flex-col items-center gap-1">
           <button
             onClick={toggleLike}
+            disabled={!user || likeLoading}
+            aria-pressed={isLiked}
+            aria-label="Reagiraj"
             className={`w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-md border transition-transform active:scale-90 ${
-              isLiked 
-                ? 'bg-primary/20 border-primary text-primary' 
+              isLiked
+                ? 'bg-primary/20 border-primary text-primary'
                 : 'bg-black/40 border-white/10 text-white/90'
             }`}
           >
@@ -259,11 +256,11 @@ function InstagramPostCard({ post, onBack }: InstagramPostCardProps) {
           >
             <span className="material-symbols-outlined text-xl">comment</span>
           </button>
-          <span className="text-[10px] font-bold text-white/80 font-mono leading-none">{post.commentsCount ?? 0}</span>
+          <span className="text-[10px] font-bold text-white/80 font-mono leading-none">{Math.max(0, post.commentsCount ?? 0)}</span>
         </div>
 
         {/* DM */}
-        {user?.uid !== post.authorId && (
+        {user && user.uid !== post.authorId && (
           <button
             onClick={initDM}
             className="w-12 h-12 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/90 active:scale-90 transition-transform"
@@ -276,6 +273,7 @@ function InstagramPostCard({ post, onBack }: InstagramPostCardProps) {
         {/* Share */}
         <button
           onClick={handleShare}
+          aria-label="Podijeli"
           className="w-12 h-12 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/90 active:scale-90 transition-transform"
         >
           <span className="material-symbols-outlined text-xl">share</span>
@@ -302,7 +300,7 @@ function InstagramPostCard({ post, onBack }: InstagramPostCardProps) {
             >
               <div className="w-12 h-1 bg-white/10 rounded-full mx-auto mb-4 cursor-pointer" onClick={() => setShowComments(false)} />
               <div className="flex items-center justify-between mb-4 pb-2 border-b border-white/5">
-                <span className="font-heading font-black text-xs uppercase tracking-widest text-[#8B8FA8]">Komentari ({post.commentsCount ?? 0})</span>
+                <span className="font-heading font-black text-xs uppercase tracking-widest text-[#8B8FA8]">Komentari ({Math.max(0, post.commentsCount ?? 0)})</span>
                 <button
                   onClick={() => setShowComments(false)}
                   className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 text-white flex items-center justify-center text-xs font-bold"
@@ -322,57 +320,39 @@ function InstagramPostCard({ post, onBack }: InstagramPostCardProps) {
 }
 
 
-
 export default function Feed() {
-  const { user: currentUser } = useAuth();
-  const location = useLocation();
+  const { user: currentUser, profile } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [posts, setPosts] = useState<FirestorePost[]>([]);
+  const [regularPosts, setRegularPosts] = useState<FirestorePost[]>([]);
+  const [pinnedPosts, setPinnedPosts] = useState<FirestorePost[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
+  const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The live listener covers the newest `pageLimit` posts; "Učitaj više" grows
+  // it, so new/edited/deleted posts stay in sync with every loaded page.
+  const [pageLimit, setPageLimit] = useState(PAGE_SIZE);
+  const [retryKey, setRetryKey] = useState(0);
   const [feedMode, setFeedMode] = useState<'standard' | 'instagram'>('standard');
   const [isSearchOpen, setIsSearchOpen] = useState(searchParams.get('search') === 'true');
   const [searchQuery, setSearchQuery] = useState('');
   const [challenges, setChallenges] = useState<any[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<any[]>([]);
   const [creators, setCreators] = useState<any[]>([]);
-  const lastDocRef = useRef<DocumentSnapshot | null>(null);
+  const uid = currentUser?.uid;
 
   useEffect(() => {
-    const q = query(collection(db, 'challenges'));
+    if (!uid) return;
+    const q = query(collection(db, 'challenges'), where('active', '==', true));
     const unsub = onSnapshot(q, (snap) => {
-      if (snap.empty) {
-        const stored = localStorage.getItem('creator_mock_challenges');
-        if (stored) {
-          try {
-            setChallenges(JSON.parse(stored));
-            return;
-          } catch (_) {}
-        }
-        import('../lib/firebase-mock').then(({ SEED_CHALLENGES }) => {
-          setChallenges(SEED_CHALLENGES);
-        });
-      } else {
-        setChallenges(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      }
+      setChallenges(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (err) => {
-      console.warn('[Feed] Challenges fetch error, using mock:', err);
-      const stored = localStorage.getItem('creator_mock_challenges');
-      if (stored) {
-        try {
-          setChallenges(JSON.parse(stored));
-          return;
-        } catch (_) {}
-      }
-      import('../lib/firebase-mock').then(({ SEED_CHALLENGES }) => {
-        setChallenges(SEED_CHALLENGES);
-      });
+      console.warn('[Feed] Challenges fetch error:', err.code);
+      setChallenges([]);
     });
     return unsub;
-  }, []);
+  }, [uid]);
 
   useEffect(() => {
     if (searchParams.get('search') === 'true') {
@@ -382,181 +362,122 @@ export default function Feed() {
   }, [searchParams, setSearchParams]);
 
   useEffect(() => {
+    if (!uid) return;
     // Listen to upcoming events
     const q = query(collection(db, 'events'));
     const unsub = onSnapshot(q, (snap) => {
-      if (snap.empty) {
-        import('../lib/firebase-mock').then(({ SEED_EVENTS }) => {
-          const now = new Date();
-          now.setHours(0, 0, 0, 0);
-          const upcoming = SEED_EVENTS.filter((e: any) => new Date(e.date) >= now);
-          upcoming.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
-          setUpcomingEvents(upcoming.slice(0, 3));
-        });
-      } else {
-        const allEvents = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const now = new Date();
-        now.setHours(0, 0, 0, 0); // start of today
-        const upcoming = allEvents.filter((e: any) => new Date(e.date) >= now);
-        upcoming.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        setUpcomingEvents(upcoming.slice(0, 3)); // show top 3 upcoming
-      }
+      const allEvents = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const now = new Date();
+      now.setHours(0, 0, 0, 0); // start of today
+      const upcoming = allEvents.filter((e: any) => e.date && new Date(e.date) >= now);
+      upcoming.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      setUpcomingEvents(upcoming.slice(0, 3)); // show top 3 upcoming
     }, (err) => {
-      console.warn('[Feed] Events fetch error, using mock:', err);
-      import('../lib/firebase-mock').then(({ SEED_EVENTS }) => {
-        const now = new Date();
-        now.setHours(0, 0, 0, 0);
-        const upcoming = SEED_EVENTS.filter((e: any) => new Date(e.date) >= now);
-        upcoming.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        setUpcomingEvents(upcoming.slice(0, 3));
-      });
+      console.warn('[Feed] Events fetch error:', err.code);
+      setUpcomingEvents([]);
     });
     return unsub;
-  }, []);
+  }, [uid]);
 
   useEffect(() => {
-    // Listen to profiles to extract creators
-    const q = query(collection(db, 'profiles'));
-    const unsub = onSnapshot(q, (snap) => {
-      if (snap.empty) {
-        import('../lib/firebase-mock').then(({ SEED_PROFILES }) => {
-          const all = Object.values(SEED_PROFILES);
-          const filtered = all.filter((p: any) => p.isCreator === true);
-          setCreators(filtered);
-        });
-      } else {
-        const all = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const filtered = all.filter((p: any) => p.isCreator === true);
-        setCreators(filtered);
-      }
-    }, (err) => {
-      console.warn('[Feed] Creators fetch error, using mock:', err);
-      import('../lib/firebase-mock').then(({ SEED_PROFILES }) => {
-        const all = Object.values(SEED_PROFILES);
-        const filtered = all.filter((p: any) => p.isCreator === true);
-        setCreators(filtered);
-      });
-    });
-    return unsub;
-  }, []);
+    if (!uid) return;
+    // Creators only (for search + level badges) — one read, not a live listener
+    // on the whole profiles collection.
+    let cancelled = false;
+    getDocs(query(collection(db, 'profiles'), where('isCreator', '==', true), limit(50)))
+      .then((snap) => {
+        if (!cancelled) setCreators(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      })
+      .catch((err) => console.warn('[Feed] Creators fetch error:', err.code));
+    return () => { cancelled = true; };
+  }, [uid]);
 
-  // Live listener for first page only
-  const subscribe = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    lastDocRef.current = null;
-
-    if (!currentUser) {
+  // Newest posts, live
+  useEffect(() => {
+    if (!uid) {
       setLoading(false);
       return;
     }
-
     const q = query(
       collection(db, 'posts'),
       orderBy('createdAt', 'desc'),
-      limit(PAGE_SIZE),
+      limit(pageLimit),
     );
-
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (snapshot.empty) {
-        import('../lib/firebase-mock').then(({ SEED_POSTS }) => {
-          setPosts(SEED_POSTS as any[]);
-          setLoading(false);
-          setError(null);
-        }).catch((mockErr) => {
-          console.error('Fallback mock posts import failed:', mockErr);
-          setError('Greška pri učitavanju feed-a. Pokušaj ponovo.');
-          setLoading(false);
-        });
-      } else {
-        const fetched = snapshot.docs
-          .map((doc) => ({ id: doc.id, ...doc.data() } as FirestorePost))
-          .filter((post) => (post as any).status !== 'deleted');
-        setPosts(fetched);
-        lastDocRef.current = snapshot.docs[snapshot.docs.length - 1] ?? null;
-        setHasMore(snapshot.docs.length === PAGE_SIZE);
-        setLoading(false);
-        setError(null);
-      }
-    }, (err) => {
-      console.warn('Feed snapshot error, using mock posts fallback:', err.code, err.message);
-      import('../lib/firebase-mock').then(({ SEED_POSTS }) => {
-        setPosts(SEED_POSTS as any[]);
-        setLoading(false);
-        setError(null);
-      }).catch((mockErr) => {
-        console.error('Fallback mock posts import failed:', mockErr);
-        setError('Greška pri učitavanju feed-a. Pokušaj ponovo.');
-        setLoading(false);
-      });
-    });
-
-    return unsubscribe;
-  }, [currentUser]);
-
-  useEffect(() => {
-    const unsubscribe = subscribe();
-    return unsubscribe;
-  }, [subscribe]);
-
-  const handleLoadMore = async () => {
-    if (!lastDocRef.current || loadingMore || !currentUser) return;
-    setLoadingMore(true);
-    try {
-      const q = query(
-        collection(db, 'posts'),
-        orderBy('createdAt', 'desc'),
-        startAfter(lastDocRef.current),
-        limit(PAGE_SIZE),
-      );
-      const snap = await getDocs(q);
-      const more = snap.docs
-        .map((doc) => ({ id: doc.id, ...doc.data() } as FirestorePost))
-        .filter((post) => (post as any).status !== 'deleted');
-      setPosts(prev => [...prev, ...more]);
-      lastDocRef.current = snap.docs[snap.docs.length - 1] ?? null;
-      setHasMore(snap.docs.length === PAGE_SIZE);
-    } catch (err) {
-      console.error('Load more failed:', err);
-    } finally {
+      setRegularPosts(snapshot.docs.map(toPost).filter(notDeleted));
+      setHasMore(snapshot.docs.length >= pageLimit);
+      setLoading(false);
       setLoadingMore(false);
-    }
+      setError(null);
+    }, (err) => {
+      console.warn('Feed snapshot error:', err.code, err.message);
+      setError('Greška pri učitavanju feed-a. Pokušaj ponovo.');
+      setLoading(false);
+      setLoadingMore(false);
+    });
+    return unsubscribe;
+  }, [uid, pageLimit, retryKey]);
+
+  // Pinned posts, live — own query so they show on top regardless of age
+  useEffect(() => {
+    if (!uid) return;
+    const q = query(collection(db, 'posts'), where('pinned', '==', true), limit(MAX_PINNED));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const list = snapshot.docs.map(toPost).filter(notDeleted);
+      list.sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0));
+      setPinnedPosts(list);
+    }, (err) => {
+      console.warn('Pinned posts snapshot error:', err.code);
+      setPinnedPosts([]);
+    });
+    return unsubscribe;
+  }, [uid, retryKey]);
+
+  const handleLoadMore = () => {
+    if (loadingMore || !hasMore || !uid) return;
+    setLoadingMore(true);
+    setPageLimit(n => n + PAGE_SIZE);
   };
 
-  const handleRetry = () => { subscribe(); };
+  // Re-running the effects (retryKey) tears down the old listeners first
+  const handleRetry = () => {
+    setLoading(true);
+    setError(null);
+    setRetryKey(k => k + 1);
+  };
 
-  const filteredPosts = posts.filter((post) => {
+  const posts = useMemo(() => {
+    const pinnedIds = new Set(pinnedPosts.map(p => p.id));
+    return [...pinnedPosts, ...regularPosts.filter(p => !pinnedIds.has(p.id))];
+  }, [pinnedPosts, regularPosts]);
 
-    // 2. Search filter
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      
-      // Handle @username search
-      if (q.startsWith('@')) {
-        const targetUser = q.slice(1);
-        return post.authorName.toLowerCase().includes(targetUser);
-      }
-      
-      // Handle text search (content or title)
-      const contentMatch = post.content.toLowerCase().includes(q);
-      const titleMatch = post.title?.toLowerCase().includes(q);
-      return contentMatch || titleMatch;
+  // Levels we can show without extra reads: own profile + creators
+  const levelByUid = useMemo(() => {
+    const map = new Map<string, number>();
+    creators.forEach((c: any) => map.set(c.id, calculateLevel(c.xp ?? 0)));
+    if (uid && profile) map.set(uid, calculateLevel(profile.xp ?? 0));
+    return map;
+  }, [creators, uid, profile]);
+
+  const trimmedQuery = searchQuery.toLowerCase().trim();
+  const sortedPosts = posts.filter((post) => {
+    if (!trimmedQuery) return true;
+
+    // Handle @username search
+    if (trimmedQuery.startsWith('@')) {
+      return (post.authorName || '').toLowerCase().includes(trimmedQuery.slice(1));
     }
 
-    return true;
+    // Handle text search (content or title)
+    const contentMatch = (post.content || '').toLowerCase().includes(trimmedQuery);
+    const titleMatch = (post.title || '').toLowerCase().includes(trimmedQuery);
+    return contentMatch || titleMatch;
   });
 
-  // Pinned posts always float to the top
-  const sortedPosts = [
-    ...filteredPosts.filter(p => p.pinned),
-    ...filteredPosts.filter(p => !p.pinned),
-  ];
-
-  const matchedCreators = searchQuery.trim() ? creators.filter(c => {
-    const q = searchQuery.toLowerCase().trim();
-    return c.username.toLowerCase().includes(q) || 
-           (c.mainTopic && c.mainTopic.toLowerCase().includes(q)) ||
-           (c.bio && c.bio.toLowerCase().includes(q));
+  const matchedCreators = trimmedQuery ? creators.filter(c => {
+    return (c.username || '').toLowerCase().includes(trimmedQuery) ||
+           (c.mainTopic && c.mainTopic.toLowerCase().includes(trimmedQuery)) ||
+           (c.bio && c.bio.toLowerCase().includes(trimmedQuery));
   }) : [];
 
   return (
@@ -580,14 +501,38 @@ export default function Feed() {
 
           {/* Posts Container */}
           <div className="flex-1 overflow-y-scroll snap-y snap-mandatory scrollbar-hidden bg-black">
-            {sortedPosts.length === 0 ? (
+            {loading ? (
+              <div className="h-full flex items-center justify-center">
+                <RefreshCw className="w-6 h-6 text-white/60 animate-spin" />
+              </div>
+            ) : sortedPosts.length === 0 ? (
               <div className="h-full flex items-center justify-center text-center p-6">
-                <p className="text-muted-foreground text-sm">Nema dostupnih video objava.</p>
+                <p className="text-muted-foreground text-sm">
+                  {trimmedQuery ? 'Nema objava za ovu pretragu.' : 'Još nema objava.'}
+                </p>
               </div>
             ) : (
-              sortedPosts.map((post) => (
-                <InstagramPostCard key={post.id} post={post} onBack={() => setFeedMode('standard')} />
-              ))
+              <>
+                {sortedPosts.map((post) => (
+                  <InstagramPostCard
+                    key={post.id}
+                    post={post}
+                    authorLevel={levelByUid.get(post.authorId)}
+                    onBack={() => setFeedMode('standard')}
+                  />
+                ))}
+                {hasMore && !trimmedQuery && (
+                  <div className="h-40 snap-start flex items-center justify-center bg-black">
+                    <button
+                      onClick={handleLoadMore}
+                      disabled={loadingMore}
+                      className="px-5 py-2 rounded-full border border-white/20 text-white text-sm font-bold disabled:opacity-50"
+                    >
+                      {loadingMore ? 'Učitavanje...' : 'Učitaj više'}
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -630,16 +575,18 @@ export default function Feed() {
             {matchedCreators.map((creator) => {
               const avatarSrc = creator.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${creator.username}`;
               return (
-                <Link 
-                  to={`/creator/${creator.id}`} 
+                <Link
+                  to={`/creator/${creator.id}`}
                   key={creator.id}
                   className="bg-[#151E30] border border-white/5 rounded-2xl p-4 flex items-center gap-4 hover:border-[#3B82F6]/50 transition-all cursor-pointer group"
                 >
                   <div className="w-12 h-12 rounded-full p-0.5 active-avatar shrink-0">
-                    <img 
-                      src={avatarSrc} 
-                      alt={creator.username} 
-                      className="w-full h-full rounded-full object-cover" 
+                    <img
+                      src={avatarSrc}
+                      alt={creator.username}
+                      loading="lazy"
+                      decoding="async"
+                      className="w-full h-full rounded-full object-cover"
                     />
                   </div>
                   <div className="flex-1 min-w-0 text-left">
@@ -663,14 +610,14 @@ export default function Feed() {
 
 
       {/* Nadolazeća Predavanja widget */}
-      {upcomingEvents.length > 0 && !searchQuery && (
+      {upcomingEvents.length > 0 && !trimmedQuery && (
         <section className="px-4 mb-6 text-left">
           <h2 className="mb-3 text-[11px] uppercase font-mono tracking-[0.1em] text-[#8B8FA8]" style={{ fontVariant: 'small-caps' }}>
             Nadolazeća Predavanja i Live Q&A
           </h2>
           <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hidden">
             {upcomingEvents.map((event) => (
-              <div 
+              <div
                 key={event.id}
                 onClick={() => navigate(`/calendar?eventId=${event.id}`)}
                 className="bg-[#151E30] border border-white/5 rounded-2xl p-4 flex flex-col justify-between hover:border-[#3B82F6]/50 transition-all cursor-pointer group min-w-[260px] max-w-[260px] relative overflow-hidden"
@@ -685,7 +632,7 @@ export default function Feed() {
                   <div className="flex justify-between items-center mb-2">
                     <span className={cn(
                       "text-[8px] font-mono font-bold uppercase tracking-widest px-2 py-0.5 rounded-full",
-                      event.type === 'live_qa' ? 'bg-[#3B82F6]/20 text-[#3B82F6]' : 
+                      event.type === 'live_qa' ? 'bg-[#3B82F6]/20 text-[#3B82F6]' :
                       event.type === 'guest_lecture' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-emerald-500/20 text-emerald-400'
                     )}>
                       {event.type === 'live_qa' ? 'Live Q&A' : event.type === 'guest_lecture' ? 'Gost' : 'Accountability'}
@@ -703,9 +650,11 @@ export default function Feed() {
                   <span className="text-[10px] font-bold text-[#3B82F6]">
                     {new Date(event.date).toLocaleDateString('hr-HR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}h
                   </span>
-                  <span className="text-[9px] text-[#8B8FA8] truncate font-medium max-w-[100px]">
-                    by {event.speaker.split(' ')[0]}
-                  </span>
+                  {event.speaker && (
+                    <span className="text-[9px] text-[#8B8FA8] truncate font-medium max-w-[100px]">
+                      by {String(event.speaker).split(' ')[0]}
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
@@ -713,7 +662,7 @@ export default function Feed() {
         </section>
       )}
 
-      {challenges.filter(c => c.active).map(c => {
+      {!trimmedQuery && challenges.map(c => {
         const daysLeft = c.deadline
           ? Math.max(0, Math.ceil((new Date(c.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
           : (c.daysRemaining ?? 0);
@@ -775,8 +724,15 @@ export default function Feed() {
           </div>
         ) : (
           <>
-            {sortedPosts.map((post) => <PostCard key={post.id} post={post} />)}
-            {hasMore && !searchQuery && (
+            {sortedPosts.length === 0 && (
+              <div className="glass rounded-3xl p-8 text-center border border-white/5">
+                <p className="text-muted-foreground text-sm">Nema objava za ovu pretragu.</p>
+              </div>
+            )}
+            {sortedPosts.map((post) => (
+              <PostCard key={post.id} post={post} authorLevel={levelByUid.get(post.authorId)} />
+            ))}
+            {hasMore && !trimmedQuery && (
               <button
                 onClick={handleLoadMore}
                 disabled={loadingMore}

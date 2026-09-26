@@ -26,7 +26,7 @@ export default function Tools() {
           className="bg-[#151E30] rounded-[20px] border border-[rgba(255,255,255,0.06)] p-[24px] relative overflow-hidden cursor-pointer hover:border-[#3B82F6]/30 transition-colors group"
         >
           <div className="absolute top-0 right-0 bg-[#3B82F6]/10 text-[#3B82F6] px-4 py-1.5 rounded-bl-[16px] font-heading font-[800] text-[10px] tracking-widest uppercase flex items-center gap-1">
-            <Sparkles className="w-3 h-3" /> +20 XP PO ROLLU
+            <Sparkles className="w-3 h-3" /> +20 XP DNEVNO
           </div>
 
           <div className="flex flex-col gap-4 mt-2">
@@ -46,7 +46,7 @@ export default function Tools() {
           className="bg-[#151E30] rounded-[20px] border border-[rgba(255,255,255,0.06)] p-[24px] relative overflow-hidden cursor-pointer hover:border-[#3B82F6]/30 transition-colors group"
         >
           <div className="absolute top-0 right-0 bg-[#3B82F6]/10 text-[#3B82F6] px-4 py-1.5 rounded-bl-[16px] font-heading font-[800] text-[10px] tracking-widest uppercase flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-[#3B82F6] animate-pulse" /> LIVE
+            <Flame className="w-3 h-3" /> Trendovi tjedna
           </div>
 
           <div className="flex flex-col gap-4 mt-2">
@@ -55,7 +55,7 @@ export default function Tools() {
             </div>
             <div>
               <h2 className="font-heading font-[800] text-[22px] text-[#FFFFFF] leading-tight mb-2 uppercase">Trend Tracker</h2>
-              <p className="font-sans text-[14px] text-[#8B8FA8]">Trending zvukovi, formati i hashtagovi.</p>
+              <p className="font-sans text-[14px] text-[#8B8FA8]">Odabrani zvukovi, formati i hashtagovi tjedna.</p>
             </div>
           </div>
         </div>
@@ -66,7 +66,7 @@ export default function Tools() {
           className="bg-[#151E30] rounded-[20px] border border-[rgba(255,255,255,0.06)] p-[24px] relative overflow-hidden cursor-pointer hover:border-[#3B82F6]/30 transition-colors group"
         >
           <div className="absolute top-0 right-0 bg-[#3B82F6]/10 text-[#3B82F6] px-4 py-1.5 rounded-bl-[16px] font-heading font-[800] text-[10px] tracking-widest uppercase flex items-center gap-1">
-            <Sparkles className="w-3 h-3" /> +30 XP
+            <Sparkles className="w-3 h-3" /> +30 XP DNEVNO
           </div>
 
           <div className="flex flex-col gap-4 mt-2">
@@ -75,7 +75,7 @@ export default function Tools() {
             </div>
             <div>
               <h2 className="font-heading font-[800] text-[22px] text-[#FFFFFF] leading-tight mb-2 uppercase">Ideje za Video</h2>
-              <p className="font-sans text-[14px] text-[#8B8FA8]">Opiši svoju nišu, AI generiša kompletnu video ideju.</p>
+              <p className="font-sans text-[14px] text-[#8B8FA8]">Opiši svoju nišu i dobij kompletnu video ideju po provjerenim formulama.</p>
             </div>
           </div>
         </div>

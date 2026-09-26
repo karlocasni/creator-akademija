@@ -5,6 +5,16 @@ import { useNavigate } from 'react-router-dom';
 import { bottomNavEventTarget } from '../components/layout/BottomNav';
 import { db } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { toast } from '../lib/dialog';
+import type { UserProfile } from '../types/post';
+
+const IDEA_XP = 30;
+// XP for this tool is given at most once per (local) day — stored on the profile
+type IdeaXpProfile = UserProfile & { lastIdeaXpDate?: string };
+const todayKey = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 const NIŠE = ['Lifestyle', 'Fitness', 'Edukacija', 'Humor', 'Gaming', 'Glazba', 'Hrana', 'Putovanja', 'Moda', 'Biznis', 'Motivacija'];
 const CILJEVI = ['Viralni doseg', 'Novi pratitelji', 'Prodaja', 'Edukacija', 'Zabava'];
@@ -113,6 +123,8 @@ export default function VideoIdeaGenerator() {
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
   const [xpAwarded, setXpAwarded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const xpClaimedToday = (profile as IdeaXpProfile | null)?.lastIdeaXpDate === todayKey();
 
   useEffect(() => {
     bottomNavEventTarget.dispatchEvent(new Event('hide'));
@@ -128,31 +140,38 @@ export default function VideoIdeaGenerator() {
     setXpAwarded(false);
     setSaved(false);
 
-    // Simulate AI thinking delay
-    await new Promise(r => setTimeout(r, 1800));
+    // Short pause so the result doesn't just flash in
+    await new Promise(r => setTimeout(r, 700));
 
     const idea = generateIdeaLocally(nisa, tema, publika, cilj, platforma);
     setResult(idea);
     setIsGenerating(false);
-    setXpAwarded(true);
 
-    if (profile) {
-      updateLocalProfile({ xp: profile.xp + 30 });
+    // At most once per day — otherwise every click would be free XP
+    const today = todayKey();
+    if (profile && (profile as IdeaXpProfile).lastIdeaXpDate !== today) {
+      updateLocalProfile({ xp: (profile.xp || 0) + IDEA_XP, lastIdeaXpDate: today } as Partial<UserProfile>);
+      setXpAwarded(true);
     }
   };
 
   const formatFullText = (idea: GeneratedIdea) =>
     `**HOOK:** ${idea.hook}\n\n**STRUKTURA:**\n${idea.struktura.map((s, i) => `${i + 1}. ${s}`).join('\n')}\n\n**CAPTION:** ${idea.caption}\n\n**HASHTAGI:** ${idea.hashtagi.join(' ')}\n\n**ZAŠTO RADI:** ${idea.zastoRadi}`;
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     if (!result) return;
-    navigator.clipboard.writeText(formatFullText(result));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(formatFullText(result));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast('Kopiranje nije uspjelo.', 'error');
+    }
   };
 
   const handleSave = async () => {
-    if (!result || !user) return;
+    if (!result || !user || saving || saved) return;
+    setSaving(true);
     try {
       await addDoc(collection(db, 'videoIdeas'), {
         userId: user.uid,
@@ -166,8 +185,12 @@ export default function VideoIdeaGenerator() {
         createdAt: serverTimestamp(),
       });
       setSaved(true);
+      toast('Ideja je spremljena.', 'success');
     } catch (e) {
-      console.error('Save failed:', e);
+      console.error('[VideoIdeaGenerator] Save failed:', e);
+      toast('Spremanje ideje nije uspjelo. Pokušaj ponovno.', 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -199,10 +222,10 @@ export default function VideoIdeaGenerator() {
           <h1 className="font-heading font-[800] text-[20px] text-[#FFFFFF] leading-[1.1] uppercase">
             Ideje za Video
           </h1>
-          <p className="font-sans text-[13px] text-[#8B8FA8]">AI generator kompletnih video ideja</p>
+          <p className="font-sans text-[13px] text-[#8B8FA8]">Generator kompletnih video ideja</p>
         </div>
         <div className="ml-auto bg-[#3B82F6]/10 text-[#3B82F6] px-3 py-1.5 rounded-full font-heading font-[800] text-[10px] tracking-widest uppercase flex items-center gap-1 shrink-0">
-          <Sparkles className="w-3 h-3" /> +30 XP
+          <Sparkles className="w-3 h-3" /> {xpClaimedToday ? 'XP danas preuzet' : `+${IDEA_XP} XP danas`}
         </div>
       </div>
 
@@ -272,7 +295,7 @@ export default function VideoIdeaGenerator() {
             {isGenerating ? (
               <>
                 <Sparkles className="w-5 h-5 animate-spin" />
-                AI GENERIRA IDEJU...
+                GENERIRAM IDEJU...
               </>
             ) : (
               <>
@@ -284,7 +307,7 @@ export default function VideoIdeaGenerator() {
 
           {xpAwarded && !isGenerating && (
             <div className="text-center py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full font-mono font-bold text-[11px] uppercase tracking-widest animate-pulse">
-              🎉 +30 Creator XP dodan!
+              🎉 +{IDEA_XP} Creator XP dodan! (jednom dnevno)
             </div>
           )}
         </div>
@@ -307,7 +330,7 @@ export default function VideoIdeaGenerator() {
                 </button>
                 <button
                   onClick={handleSave}
-                  disabled={saved}
+                  disabled={saved || saving}
                   className={`flex items-center gap-2 px-4 py-2 rounded-full text-[12px] font-bold transition-colors ${
                     saved
                       ? 'bg-[#3B82F6]/20 text-[#3B82F6] cursor-default'

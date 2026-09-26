@@ -1,15 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { calculateLevel } from '../lib/xp';
 import Leaderboard from '../components/feed/Leaderboard';
 import { User, Phone, Mail, Camera, ShieldCheck, LogOut, ArrowLeft, ChevronDown, KeyRound, Flame, Target, Bookmark, Trash2, TrendingUp } from 'lucide-react';
-import { db, storage, auth } from '../lib/firebase';
-import { doc, setDoc, getDoc, updateDoc, collection, query, where, getDocs, limit, onSnapshot, deleteDoc } from 'firebase/firestore';
+import { db, auth } from '../lib/firebase';
+import { doc, setDoc, updateDoc, collection, query, where, getDocs, limit, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { sendPasswordResetEmail } from 'firebase/auth';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import XPBadge from '../components/ui/XPBadge';
 import { UserProfile } from '../types/post';
-import { calculateLevel } from '../lib/xp';
+import { prepareImage, uploadMedia, mediaPath, deleteMediaByUrl, uploadErrorMessage, MB } from '../lib/media';
+import { toast, confirmDialog } from '../lib/dialog';
 
 function parseFirestoreDate(val: unknown): Date | null {
   if (!val) return null;
@@ -23,33 +24,48 @@ function parseFirestoreDate(val: unknown): Date | null {
   return null;
 }
 
+/** Level is always derived from XP (same table as lib/xp.ts). */
+function levelOf(p?: { xp?: number } | null): number {
+  return calculateLevel(p?.xp || 0);
+}
+
+// 2–30 chars: letters (incl. č ć đ š ž), digits, . _ -
+const USERNAME_RE = /^[\p{L}\p{N}._-]{2,30}$/u;
+const stripAt = (v?: string | null) => (v || '').trim().replace(/^@+/, '');
+
+const AVATAR_MAX_BYTES = 5 * MB; // storage.rules: avatars are image/* < 5 MB
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 const GOAL_OPTIONS = [1, 2, 3, 5, 7];
 
 type ProfileTab = 'profil' | 'rang-lista' | 'ciljevi' | 'spremljeno';
 type SavedSubTab = 'ideje' | 'hookovi' | 'trendovi';
+type ViewedProfile = UserProfile & { id: string };
 
 export default function Profile() {
   const { userId: paramId, username: paramUsername } = useParams();
   const navigate = useNavigate();
-  const { user, profile: myProfile, signOut, updateLocalProfile } = useAuth();
-  
+  const { user, profile: myProfile, isActualAdmin, signOut, updateLocalProfile } = useAuth();
+
   const [loading, setLoading] = useState(false);
   const [fetchingProfile, setFetchingProfile] = useState(false);
-  const [viewedProfile, setViewedProfile] = useState<UserProfile | null>(null);
-  
+  const [otherProfile, setOtherProfile] = useState<ViewedProfile | null>(null);
+  const [notFound, setNotFound] = useState(false);
+  const [adminBusy, setAdminBusy] = useState(false);
+
   // Form states for current user
   const [username, setUsername] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [bio, setBio] = useState('');
   const [gender, setGender] = useState<'male' | 'female'>('male');
-  
+
   // Social states
   const [instagram, setInstagram] = useState('');
   const [tiktok, setTiktok] = useState('');
   const [youtube, setYoutube] = useState('');
-  
+
   const [editOpen, setEditOpen] = useState(false);
-  const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [resetSent, setResetSent] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -73,149 +89,196 @@ export default function Profile() {
     try {
       await sendPasswordResetEmail(auth, user.email);
       setResetSent(true);
+      toast('Link za promjenu lozinke poslan je na tvoj email.', 'success');
       setTimeout(() => setResetSent(false), 5000);
     } catch (err) {
       console.error('Reset error:', err);
+      toast('Slanje linka nije uspjelo. Pokušaj ponovno.', 'error');
     }
   };
 
   // Determine if we are looking at our own profile
-  const isOwnProfile = (!paramId && !paramUsername) || paramId === user?.uid || (paramUsername && paramUsername === myProfile?.username);
+  const isOwnProfile =
+    (!paramId && !paramUsername) ||
+    (!!paramId && paramId === user?.uid) ||
+    (!!paramUsername && stripAt(paramUsername).toLowerCase() === stripAt(myProfile?.username).toLowerCase());
 
+  const viewedProfile: ViewedProfile | null = isOwnProfile
+    ? (myProfile && user ? { ...myProfile, id: user.uid } : null)
+    : otherProfile;
+  const viewedId = viewedProfile?.id;
+  const isRealAdmin = isActualAdmin && myProfile?.isAdmin === true;
+
+  // Keep the edit form in sync with the saved profile while it is closed
+  // (never overwrite what the user is typing).
   useEffect(() => {
-    async function fetchUser() {
-      if (isOwnProfile) {
-        setViewedProfile(myProfile);
-        if (myProfile) {
-          setUsername(myProfile.username || '');
-          setPhoneNumber(myProfile.phone_number || '');
-          setBio(myProfile.bio || '');
-          setGender(myProfile.gender || 'male');
-          setInstagram(myProfile.instagram || '');
-          setTiktok(myProfile.tiktok || '');
-          setYoutube(myProfile.youtube || '');
-          setWeeklyGoal(myProfile.weeklyGoal ?? 3);
-        }
-      } else if (paramId) {
-        setFetchingProfile(true);
-        try {
-          const docSnap = await getDoc(doc(db, 'profiles', paramId));
-          if (docSnap.exists()) {
-            setViewedProfile(docSnap.data() as UserProfile);
-          }
-        } catch (err) {
-          console.error('Error fetching profile:', err);
-        } finally {
-          setFetchingProfile(false);
-        }
-      } else if (paramUsername) {
-        setFetchingProfile(true);
-        try {
-          const q = query(
-            collection(db, 'profiles'),
-            where('username', '==', paramUsername),
-            limit(1)
-          );
-          const snap = await getDocs(q);
-          if (!snap.empty) {
-            setViewedProfile(snap.docs[0].data() as UserProfile);
-          }
-        } catch (err) {
-          console.error('Error fetching profile by username:', err);
-        } finally {
-          setFetchingProfile(false);
-        }
-      }
-    }
-    fetchUser();
-  }, [paramId, isOwnProfile, myProfile]);
+    if (!isOwnProfile || !myProfile || editOpen) return;
+    setUsername(myProfile.username || '');
+    setPhoneNumber(myProfile.phone_number || '');
+    setBio(myProfile.bio || '');
+    setGender(myProfile.gender || 'male');
+    setInstagram(myProfile.instagram || '');
+    setTiktok(myProfile.tiktok || '');
+    setYoutube(myProfile.youtube || '');
+    setWeeklyGoal(myProfile.weeklyGoal ?? 3);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOwnProfile, editOpen, myProfile?.username, myProfile?.phone_number, myProfile?.bio, myProfile?.gender,
+    myProfile?.instagram, myProfile?.tiktok, myProfile?.youtube, myProfile?.weeklyGoal]);
 
-  // Load saved items for own profile
+  // Someone else's profile: live listener by id, or by username (with or without '@').
+  useEffect(() => {
+    if (isOwnProfile || !user) {
+      setOtherProfile(null);
+      setNotFound(false);
+      setFetchingProfile(false);
+      return;
+    }
+    setFetchingProfile(true);
+    setNotFound(false);
+    setOtherProfile(null);
+
+    const onError = (err: unknown) => {
+      console.error('Error fetching profile:', err);
+      setFetchingProfile(false);
+      setNotFound(true);
+    };
+
+    if (paramId) {
+      return onSnapshot(doc(db, 'profiles', paramId), (snap) => {
+        setOtherProfile(snap.exists() ? { ...(snap.data() as UserProfile), id: snap.id } : null);
+        setNotFound(!snap.exists());
+        setFetchingProfile(false);
+      }, onError);
+    }
+
+    const bare = stripAt(paramUsername);
+    if (!bare) {
+      setFetchingProfile(false);
+      setNotFound(true);
+      return;
+    }
+    const q = query(collection(db, 'profiles'), where('username', 'in', [`@${bare}`, bare]), limit(1));
+    return onSnapshot(q, (snap) => {
+      const d = snap.docs[0];
+      setOtherProfile(d ? { ...(d.data() as UserProfile), id: d.id } : null);
+      setNotFound(!d);
+      setFetchingProfile(false);
+    }, onError);
+  }, [paramId, paramUsername, isOwnProfile, user?.uid]);
+
+  // Load saved items for own profile (rules only allow reading your own docs,
+  // so every listener must be filtered by the owner).
   useEffect(() => {
     if (!user || !isOwnProfile) return;
+    const uid = user.uid;
+    const warn = (what: string) => (err: unknown) => console.warn(`[Profile] ${what} listener error:`, err);
 
-    const unsubIdeas = onSnapshot(collection(db, 'videoIdeas'), snap => {
-      const items = snap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .filter((item: any) => item.userId === user.uid);
-      setSavedIdeas(items);
-    });
+    const unsubIdeas = onSnapshot(
+      query(collection(db, 'videoIdeas'), where('userId', '==', uid)),
+      snap => setSavedIdeas(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      warn('videoIdeas'),
+    );
 
-    const unsubHooks = onSnapshot(collection(db, 'hookVault'), snap => {
+    const unsubHooks = onSnapshot(
+      query(collection(db, 'hookVault'), where('authorId', '==', uid)),
       // Show hooks submitted by the user (saved = submitted in this context)
-      const items = snap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .filter((item: any) => item.authorId === user.uid);
-      setSavedHooks(items);
-    });
+      snap => setSavedHooks(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      warn('hookVault'),
+    );
 
-    const unsubTrends = onSnapshot(collection(db, 'savedTrends'), snap => {
-      const items = snap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .filter((item: any) => item.userId === user.uid);
-      setSavedTrends(items);
-    });
+    const unsubTrends = onSnapshot(
+      query(collection(db, 'savedTrends'), where('userId', '==', uid)),
+      snap => setSavedTrends(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      warn('savedTrends'),
+    );
 
     return () => {
       unsubIdeas();
       unsubHooks();
       unsubTrends();
     };
-  }, [user, isOwnProfile]);
-
-  const showStatus = (type: 'success' | 'error', text: string) => {
-    setStatusMsg({ type, text });
-    setTimeout(() => setStatusMsg(null), 3000);
-  };
+  }, [user?.uid, isOwnProfile]);
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user?.uid) return;
+    setFormError(null);
+
+    const bare = stripAt(username);
+    if (!USERNAME_RE.test(bare)) {
+      setFormError('Korisničko ime: 2–30 znakova, samo slova, brojke i . _ - (bez razmaka).');
+      return;
+    }
+    const cleanUsername = `@${bare}`;
+
     setLoading(true);
     try {
-      if (!user?.uid) throw new Error('Korisnik nije prijavljen.');
+      if (cleanUsername !== myProfile?.username) {
+        const snap = await getDocs(
+          query(collection(db, 'profiles'), where('username', 'in', [cleanUsername, bare]), limit(2)),
+        );
+        if (snap.docs.some(d => d.id !== user.uid)) {
+          setFormError('To korisničko ime je već zauzeto.');
+          return;
+        }
+      }
+
       await setDoc(
         doc(db, 'profiles', user.uid),
-        { username, phone_number: phoneNumber, bio: bio.trim(), gender, instagram: instagram.trim(), tiktok: tiktok.trim(), youtube: youtube.trim(), updatedAt: new Date().toISOString() },
+        {
+          username: cleanUsername,
+          phone_number: phoneNumber.trim(),
+          bio: bio.trim(),
+          gender,
+          instagram: instagram.trim(),
+          tiktok: tiktok.trim(),
+          youtube: youtube.trim(),
+          updatedAt: new Date().toISOString(),
+        },
         { merge: true },
       );
-      showStatus('success', 'Profil uspješno ažuriran!');
+      setUsername(cleanUsername);
+      setEditOpen(false);
+      toast('Profil uspješno ažuriran!', 'success');
     } catch (err) {
-      showStatus('error', 'Greška pri ažuriranju profila.');
       console.error(err);
+      toast('Greška pri ažuriranju profila.', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target;
+    const file = input.files?.[0];
+    input.value = ''; // allow picking the same file again
     if (!file || !user?.uid) return;
 
-    if (file.size > 2 * 1024 * 1024) {
-      showStatus('error', 'Slika je prevelika. Maksimalna veličina je 2MB.');
-      return;
+    const uid = user.uid;
+    const previous = myProfile?.avatar_url;
+    setUploadProgress(0);
+    try {
+      const blob = await prepareImage(file, 512);
+      if (blob.size >= AVATAR_MAX_BYTES) {
+        toast('Slika je prevelika (max 5 MB).', 'error');
+        return;
+      }
+      const { promise } = uploadMedia(mediaPath(`avatars/${uid}`, blob.type), blob, (f) =>
+        setUploadProgress(Math.round(f * 100)),
+      );
+      const url = await promise;
+      await setDoc(doc(db, 'profiles', uid), { avatar_url: url, updatedAt: new Date().toISOString() }, { merge: true });
+      // Only ever clean up the user's own previous avatar file
+      if (previous && previous !== url && previous.includes(`avatars%2F${uid}%2F`)) {
+        deleteMediaByUrl(previous);
+      }
+      toast('Profilna slika ažurirana!', 'success');
+    } catch (err) {
+      console.error('Avatar upload failed:', err);
+      toast(uploadErrorMessage(err), 'error');
+    } finally {
+      setUploadProgress(null);
     }
-
-    const storageRef = ref(storage, `avatars/${user.uid}/avatar.jpg`);
-    const task = uploadBytesResumable(storageRef, file);
-
-    task.on(
-      'state_changed',
-      (snapshot) => {
-        setUploadProgress(Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100));
-      },
-      (err) => {
-        console.error(err);
-        setUploadProgress(null);
-        showStatus('error', 'Greška pri uploadu slike.');
-      },
-      async () => {
-        const url = await getDownloadURL(task.snapshot.ref);
-        await setDoc(doc(db, 'profiles', user.uid), { avatar_url: url }, { merge: true });
-        setUploadProgress(null);
-        showStatus('success', 'Avatar uspješno ažuriran!');
-      },
-    );
   };
 
   const handleSaveGoal = async (goal: number) => {
@@ -229,17 +292,86 @@ export default function Profile() {
       setTimeout(() => setGoalToast(null), 2500);
     } catch (e) {
       console.error(e);
+      toast('Spremanje cilja nije uspjelo.', 'error');
     } finally {
       setSavingGoal(false);
     }
   };
 
   const handleRemoveSavedIdea = async (id: string) => {
-    await deleteDoc(doc(db, 'videoIdeas', id));
+    try {
+      await deleteDoc(doc(db, 'videoIdeas', id));
+    } catch (err) {
+      console.error(err);
+      toast('Brisanje nije uspjelo.', 'error');
+    }
   };
 
   const handleRemoveSavedTrend = async (id: string) => {
-    await deleteDoc(doc(db, 'savedTrends', id));
+    try {
+      await deleteDoc(doc(db, 'savedTrends', id));
+    } catch (err) {
+      console.error(err);
+      toast('Brisanje nije uspjelo.', 'error');
+    }
+  };
+
+  // ─── Admin actions on someone else's profile ─────────────────────────────────
+
+  const adminUpdate = async (patch: Partial<UserProfile>, okText: string) => {
+    if (!viewedId || !isRealAdmin) return;
+    setAdminBusy(true);
+    try {
+      await updateDoc(doc(db, 'profiles', viewedId), { ...patch, updatedAt: new Date().toISOString() });
+      toast(okText, 'success');
+    } catch (err) {
+      console.error('Admin update failed:', err);
+      toast('Spremanje nije uspjelo.', 'error');
+    } finally {
+      setAdminBusy(false);
+    }
+  };
+
+  const handleToggleActive = async () => {
+    if (!viewedProfile) return;
+    if (viewedProfile.status === 'active') {
+      const ok = await confirmDialog(
+        `Deaktivirati ${viewedProfile.username}? Izgubit će pristup sadržaju dok ga ponovno ne aktiviraš.`,
+        { confirmLabel: 'Deaktiviraj', danger: true },
+      );
+      if (ok) await adminUpdate({ status: 'inactive' }, 'Korisnik je deaktiviran.');
+    } else {
+      const ok = await confirmDialog(`Aktivirati ${viewedProfile.username} na 30 dana?`, { confirmLabel: 'Aktiviraj' });
+      if (ok) {
+        await adminUpdate(
+          { status: 'active', accessUntil: new Date(Date.now() + 30 * DAY_MS).toISOString() },
+          'Korisnik je aktiviran na 30 dana.',
+        );
+      }
+    }
+  };
+
+  const handleExtendAccess = async (days: number) => {
+    if (!viewedProfile) return;
+    const current = viewedProfile.accessUntil ? new Date(viewedProfile.accessUntil).getTime() || 0 : 0;
+    const next = new Date(Math.max(Date.now(), current) + days * DAY_MS);
+    await adminUpdate({ accessUntil: next.toISOString() }, `Pristup produljen do ${next.toLocaleDateString('hr-HR')}.`);
+  };
+
+  const handleToggleCreator = async () => {
+    if (!viewedProfile) return;
+    const next = !viewedProfile.isCreator;
+    const ok = await confirmDialog(
+      next
+        ? 'Jesi li siguran da želiš promaknuti ovog korisnika u mentora?'
+        : 'Jesi li siguran da želiš ukloniti mentorska prava ovom korisniku?',
+      { confirmLabel: next ? 'Promakni' : 'Ukloni', danger: !next },
+    );
+    if (!ok) return;
+    await adminUpdate(
+      { isCreator: next, ...(next && !viewedProfile.mainTopic ? { mainTopic: 'Produkcija' } : {}) },
+      next ? 'Korisnik promaknut u mentora!' : 'Mentorska prava uklonjena.',
+    );
   };
 
   if (fetchingProfile) {
@@ -249,6 +381,18 @@ export default function Profile() {
       </div>
     );
   }
+
+  if (!isOwnProfile && notFound) {
+    return (
+      <div className="p-4 md:p-10 max-w-2xl mx-auto text-center space-y-4">
+        <p className="text-white font-bold">Profil nije pronađen.</p>
+        <button onClick={() => navigate(-1)} className="text-primary text-sm font-bold hover:underline">
+          Povratak
+        </button>
+      </div>
+    );
+  }
+
 
   const avatarSrc =
     viewedProfile?.avatar_url ||
@@ -335,7 +479,7 @@ export default function Profile() {
 
           {viewedProfile?.isCreator && (
             <Link
-              to={`/creator/${viewedProfile.uid || paramId}`}
+              to={`/creator/${viewedProfile.id}`}
               className="mt-4 px-6 py-2.5 bg-[#3B82F6] text-white rounded-full font-heading font-bold text-xs uppercase tracking-wider hover:scale-105 active:scale-95 transition-all shadow-[0_0_15px_rgba(59,130,246,0.3)]"
             >
               POGLEDAJ STRANICU MENTORA
@@ -447,9 +591,12 @@ export default function Profile() {
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
                         className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 focus:border-primary focus:outline-none transition-colors text-white"
-                        placeholder="korisnicko_ime"
+                        placeholder="@korisnicko_ime"
+                        maxLength={31}
+                        autoComplete="username"
                       />
                     </div>
+                    <p className="text-xs text-muted-foreground ml-1">2–30 znakova: slova, brojke i . _ - (bez razmaka)</p>
                   </div>
 
                   <div className="space-y-2 text-left">
@@ -527,10 +674,8 @@ export default function Profile() {
                     </div>
                   </div>
 
-                  {statusMsg && (
-                    <p className={statusMsg.type === 'success' ? 'text-sm text-primary font-bold text-center' : 'text-sm text-red-400 font-bold text-center'}>
-                      {statusMsg.text}
-                    </p>
+                  {formError && (
+                    <p className="text-sm text-red-400 font-bold text-center" role="alert">{formError}</p>
                   )}
 
                   <button
@@ -559,117 +704,80 @@ export default function Profile() {
                 </div>
                 <div className="ursa-card p-6 flex flex-col items-center justify-center text-center">
                   <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Razina</span>
-                  <span className="text-2xl font-black text-white">{calculateLevel(viewedProfile?.xp ?? 0)}</span>
+                  <span className="text-2xl font-black text-white">{levelOf(viewedProfile)}</span>
                 </div>
               </div>
-              {myProfile?.isAdmin && !isOwnProfile && paramId && (
+              {isRealAdmin && !isOwnProfile && viewedId && viewedProfile && (
                 <div className="space-y-4">
                   <div className="ursa-card p-6 border border-primary/20 bg-primary/5">
-                    <h3 className="text-sm font-black text-primary uppercase mb-4">Admin Kontrole: Pretplata</h3>
+                    <h3 className="text-sm font-black text-primary uppercase mb-4">Admin kontrole: pristup</h3>
                     <div className="space-y-2 mb-6">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground uppercase text-xs">Datum pridruživanja:</span>
                         <span className="font-bold text-white">
-                          {(() => { const d = parseFirestoreDate(viewedProfile?.createdAt); return d ? d.toLocaleDateString('hr-HR') : 'Nepoznato'; })()}
+                          {(() => { const d = parseFirestoreDate(viewedProfile.createdAt); return d ? d.toLocaleDateString('hr-HR') : 'Nepoznato'; })()}
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground uppercase text-xs">Datum isteka (90d + offset):</span>
+                        <span className="text-muted-foreground uppercase text-xs">Status:</span>
+                        <span className={`font-bold ${viewedProfile.status === 'active' ? 'text-emerald-400' : 'text-yellow-300'}`}>
+                          {viewedProfile.status === 'active' ? 'Aktivan' : 'Na čekanju / neaktivan'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground uppercase text-xs">Pristup do:</span>
                         <span className="font-bold text-primary">
                           {(() => {
-                            const d = parseFirestoreDate(viewedProfile?.createdAt);
-                            if (!d) return 'Nepoznato';
-                            const expiry = new Date(d.getTime() + (90 + (viewedProfile?.offsetDays || 0)) * 24 * 60 * 60 * 1000);
-                            return expiry.toLocaleDateString('hr-HR');
+                            const d = parseFirestoreDate(viewedProfile.accessUntil);
+                            return d ? d.toLocaleDateString('hr-HR') : 'Bez ograničenja';
                           })()}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground uppercase text-xs">Trenutni offset:</span>
-                        <span className="font-bold">{viewedProfile?.offsetDays || 0} dana</span>
-                      </div>
                     </div>
-                    <div className="flex gap-2 items-center">
-                      <input 
-                        type="number"
-                        placeholder="Novi offset"
-                        className="w-24 bg-black/50 border border-white/10 rounded-xl py-2 px-3 focus:border-primary text-white text-center"
-                        id={`offset-input-${paramId}`}
-                      />
+                    <div className="grid grid-cols-2 gap-2">
                       <button
-                        onClick={async () => {
-                          const inputEl = document.getElementById(`offset-input-${paramId}`) as HTMLInputElement;
-                          const val = parseInt(inputEl.value);
-                          if (isNaN(val)) return alert('Unesite ispravan broj');
-                          const { updateDoc } = await import('firebase/firestore');
-                          try {
-                            await updateDoc(doc(db, 'profiles', paramId), { offsetDays: val });
-                            alert(`Offset postavljen na ${val} dana.`);
-                            inputEl.value = '';
-                          } catch (err) {
-                            alert('Greška pri ažuriranju: ' + err);
-                          }
-                        }}
-                        className="flex-1 py-2 bg-primary text-black rounded-xl text-sm font-black hover:scale-[1.02] transition-transform"
+                        onClick={handleToggleActive}
+                        disabled={adminBusy}
+                        className={`py-2.5 rounded-xl text-sm font-black transition-colors disabled:opacity-50 ${
+                          viewedProfile.status === 'active'
+                            ? 'bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/30'
+                            : 'bg-emerald-500 text-black hover:bg-emerald-400'
+                        }`}
                       >
-                        POSTAVI OFFSET
+                        {viewedProfile.status === 'active' ? 'DEAKTIVIRAJ' : 'AKTIVIRAJ (30 DANA)'}
+                      </button>
+                      <button
+                        onClick={() => handleExtendAccess(30)}
+                        disabled={adminBusy}
+                        className="py-2.5 bg-primary text-black rounded-xl text-sm font-black hover:bg-primary/90 transition-colors disabled:opacity-50"
+                      >
+                        +30 DANA
                       </button>
                     </div>
+                    <Link to="/members" className="block text-center text-xs font-bold text-primary hover:underline mt-4">
+                      Detaljno upravljanje (datum, uloge) u Članovima
+                    </Link>
                   </div>
 
                   <div className="ursa-card p-6 border border-primary/20 bg-primary/5">
-                    <h3 className="text-sm font-black text-primary uppercase mb-4">Admin Kontrole: Creator Uloga</h3>
+                    <h3 className="text-sm font-black text-primary uppercase mb-4">Admin kontrole: Creator uloga</h3>
                     <p className="text-xs text-muted-foreground mb-4">
-                      {viewedProfile?.isCreator 
-                        ? 'Ovaj korisnik je trenutno MENTOR/KREATOR i drži predavanja.' 
+                      {viewedProfile.isCreator
+                        ? 'Ovaj korisnik je trenutno MENTOR/KREATOR i drži predavanja.'
                         : 'Ovaj korisnik je trenutno običan član/student.'}
                     </p>
                     <button
-                      onClick={async () => {
-                        const newCreatorStatus = !viewedProfile?.isCreator;
-                        const confirmMsg = newCreatorStatus 
-                          ? 'Jesi li siguran da želiš promaknuti ovog korisnika u mentora?' 
-                          : 'Jesi li siguran da želiš ukloniti mentorska prava ovom korisniku?';
-                        if (!window.confirm(confirmMsg)) return;
-                        
-                        try {
-                          await updateDoc(doc(db, 'profiles', paramId), {
-                            isCreator: newCreatorStatus,
-                            mainTopic: newCreatorStatus ? 'Produkcija' : null
-                          });
-                          alert(newCreatorStatus ? 'Korisnik promaknut u mentora!' : 'Mentorska prava uklonjena.');
-                          setViewedProfile(prev => prev ? { ...prev, isCreator: newCreatorStatus } : null);
-                        } catch (err) {
-                          alert('Greška pri ažuriranju uloge: ' + err);
-                        }
-                      }}
-                      className={`w-full py-3 rounded-xl text-sm font-black hover:scale-[1.02] transition-transform ${
-                        viewedProfile?.isCreator 
-                          ? 'bg-red-500/20 border border-red-500/30 text-red-400' 
+                      onClick={handleToggleCreator}
+                      disabled={adminBusy}
+                      className={`w-full py-3 rounded-xl text-sm font-black hover:scale-[1.02] transition-transform disabled:opacity-50 ${
+                        viewedProfile.isCreator
+                          ? 'bg-red-500/20 border border-red-500/30 text-red-400'
                           : 'bg-primary text-black'
                       }`}
                     >
-                      {viewedProfile?.isCreator ? 'UKLONI MENTOR STATUS' : 'PROMAKNI U MENTORA'}
+                      {viewedProfile.isCreator ? 'UKLONI MENTOR STATUS' : 'PROMAKNI U MENTORA'}
                     </button>
                   </div>
-
-                  <button
-                    onClick={async () => {
-                      if (!window.confirm('Jesi li siguran da želiš obrisati ovog korisnika?')) return;
-                      try {
-                        const { deleteDoc: del } = await import('firebase/firestore');
-                        await del(doc(db, 'profiles', paramId));
-                        alert('Korisnik obrisan.');
-                        navigate('/members');
-                      } catch (err) {
-                        console.error('Delete user failed:', err);
-                        alert('Greška pri brisanju korisnika.');
-                      }
-                    }}
-                    className="w-full py-4 ursa-card border-red-500/20 text-red-400 font-black text-lg flex items-center justify-center gap-2 hover:bg-red-500/10 transition-colors"
-                  >
-                    OBRIŠI KORISNIKA
-                  </button>
                 </div>
               )}
             </div>
@@ -789,7 +897,7 @@ export default function Profile() {
               </div>
               <div className="ursa-card p-5 flex flex-col items-center text-center">
                 <span className="text-[10px] font-mono text-[#4A4A5A] uppercase tracking-widest mb-1">Razina</span>
-                <span className="text-[24px] font-mono font-bold text-white">{calculateLevel(myProfile?.xp ?? 0)}</span>
+                <span className="text-[24px] font-mono font-bold text-white">{levelOf(myProfile)}</span>
               </div>
             </div>
           </div>

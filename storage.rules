@@ -2,28 +2,78 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    
-    // Allow any authenticated user to read all files
-    match /{allPaths=**} {
-      allow read: if request.auth != null;
+
+    function profile() {
+      return firestore.get(/databases/(default)/documents/profiles/$(request.auth.uid)).data;
     }
 
-    // Allow users to upload to their own post directory
-    match /posts/{userId}/{fileName} {
-      allow write: if request.auth != null && request.auth.uid == userId;
-    }
-
-    // Allow users to upload their own avatar
-    match /avatars/{userId}/{fileName} {
-      allow write: if request.auth != null && request.auth.uid == userId;
-    }
-
-    // Allow admins to upload event images
-    match /events/{fileName} {
-      allow write: if request.auth != null && (
-        request.auth.token.email == 'brunovujcec6@gmail.com' || 
-        request.auth.token.email == 'ismael.hadzic17@gmail.com'
+    // Keep the emails in sync with src/lib/admin.ts and firestore.rules
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.email == 'brunovujcec6@gmail.com' ||
+        request.auth.token.email == 'ismael.hadzic17@gmail.com' ||
+        profile().get('isAdmin', false) == true
       );
+    }
+
+    function isStaff() {
+      return isAdmin() || (request.auth != null && profile().get('isCreator', false) == true);
+    }
+
+    function isMember() {
+      return isAdmin() || (request.auth != null && profile().get('status', 'inactive') == 'active');
+    }
+
+    function isImage(maxMb) {
+      return request.resource.contentType.matches('image/.*') &&
+        request.resource.size < maxMb * 1024 * 1024;
+    }
+
+    function isVideo(maxMb) {
+      return request.resource.contentType.matches('video/.*') &&
+        request.resource.size < maxMb * 1024 * 1024;
+    }
+
+    // Signed-in users can read shared media (course videos and homework are handled below)
+    match /{top}/{allPaths=**} {
+      allow read: if request.auth != null && top != 'courses' && top != 'submissions';
+    }
+
+    // Course videos: only activated members (or staff) can stream them
+    match /courses/{allPaths=**} {
+      allow read: if isMember();
+      allow write: if isStaff() && (request.resource == null || isVideo(4096) || isImage(10));
+    }
+
+    // Lesson thumbnails uploaded from the admin lesson modal
+    match /thumbnails/{fileName} {
+      allow write: if isStaff() && (request.resource == null || isImage(10));
+    }
+
+    // Feed media: members upload into their own folder
+    match /posts/{userId}/{fileName} {
+      allow create, update: if request.auth != null && request.auth.uid == userId && isMember() &&
+        (isImage(10) || isVideo(200));
+      allow delete: if request.auth != null && (request.auth.uid == userId || isAdmin());
+    }
+
+    // Homework videos for "Predaja i ocjena videa"
+    match /submissions/{userId}/{fileName} {
+      allow read: if request.auth != null && (request.auth.uid == userId || isStaff());
+      allow create, update: if request.auth != null && request.auth.uid == userId && isMember() &&
+        isVideo(200);
+      allow delete: if request.auth != null && (request.auth.uid == userId || isStaff());
+    }
+
+    // Profile pictures
+    match /avatars/{userId}/{fileName} {
+      allow create, update: if request.auth != null && request.auth.uid == userId && isImage(5);
+      allow delete: if request.auth != null && (request.auth.uid == userId || isAdmin());
+    }
+
+    // Event cover images
+    match /events/{fileName} {
+      allow write: if isStaff() && (request.resource == null || isImage(10));
     }
   }
 }

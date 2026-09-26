@@ -32,6 +32,15 @@ export default class ErrorBoundary extends React.Component<Props, State> {
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error('ErrorBoundary caught:', error, info.componentStack);
+    // A new deploy replaced the lazy-loaded chunks: reload once to pick them up
+    if (/dynamically imported module|Importing a module script failed|ChunkLoadError/i.test(error.message)) {
+      try {
+        if (!sessionStorage.getItem('chunk_reload')) {
+          sessionStorage.setItem('chunk_reload', '1');
+          window.location.reload();
+        }
+      } catch { /* storage unavailable */ }
+    }
   }
 
   handleReset = () => {
@@ -48,7 +57,7 @@ export default class ErrorBoundary extends React.Component<Props, State> {
             <p className="text-muted-foreground text-sm mb-2">
               Stranica se nije učitala ispravno. Pokušaj ponovo.
             </p>
-            {this.state.error && (
+            {import.meta.env.DEV && this.state.error && (
               <p className="text-xs text-red-400/60 font-mono mb-6 break-all">
                 {this.state.error.message}
               </p>

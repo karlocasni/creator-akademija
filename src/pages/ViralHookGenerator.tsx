@@ -4,6 +4,26 @@ import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { bottomNavEventTarget } from '../components/layout/BottomNav';
+import { toast } from '../lib/dialog';
+import type { UserProfile } from '../types/post';
+
+const HOOK_XP = 20;
+// XP for this tool is given at most once per (local) day — stored on the profile
+type HookXpProfile = UserProfile & { lastHookXpDate?: string };
+const todayKey = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+const copyText = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    toast('Kopiranje nije uspjelo.', 'error');
+    return false;
+  }
+};
 
 const ATTENTIONS = [
   "Svi ti lažu o...",
@@ -50,6 +70,7 @@ export default function ViralHookGenerator() {
   const [copied, setCopied] = useState(false);
   const [recentHooks, setRecentHooks] = useState<string[]>([]);
   const [xpAwarded, setXpAwarded] = useState(false);
+  const xpClaimedToday = (profile as HookXpProfile | null)?.lastHookXpDate === todayKey();
 
   const rollSlots = () => {
     if (isSpinning) return;
@@ -66,11 +87,12 @@ export default function ViralHookGenerator() {
       if (ticks >= 10) {
         clearInterval(interval);
         setIsSpinning(false);
-        setXpAwarded(true);
-        
-        // Award XP!
-        if (profile) {
-          updateLocalProfile({ xp: profile.xp + 20 });
+
+        // Award XP at most once per day — otherwise every roll would be free XP
+        const today = todayKey();
+        if (profile && (profile as HookXpProfile).lastHookXpDate !== today) {
+          updateLocalProfile({ xp: (profile.xp || 0) + HOOK_XP, lastHookXpDate: today } as Partial<UserProfile>);
+          setXpAwarded(true);
         }
       }
     }, 100);
@@ -92,11 +114,12 @@ export default function ViralHookGenerator() {
     }
   }, [isSpinning]);
 
-  const copyToClipboard = () => {
+  const copyToClipboard = async () => {
     const fullHook = `${attention} ${problem} ${action}`;
-    navigator.clipboard.writeText(fullHook);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (await copyText(fullHook)) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   return (
@@ -122,7 +145,7 @@ export default function ViralHookGenerator() {
 
         <div className="bg-[#151E30] rounded-[24px] border border-[rgba(255,255,255,0.06)] p-[20px] relative overflow-hidden">
           <div className="absolute top-0 right-0 bg-[#3B82F6]/10 text-[#3B82F6] px-4 py-1.5 rounded-bl-[16px] font-heading font-[800] text-[10px] tracking-widest uppercase flex items-center gap-1">
-            <Sparkles className="w-3 h-3" /> Roll daje +20 XP
+            <Sparkles className="w-3 h-3" /> {xpClaimedToday ? 'XP danas preuzet' : `+${HOOK_XP} XP danas`}
           </div>
 
           <div className="flex items-center gap-[12px] mb-[16px]">
@@ -184,7 +207,7 @@ export default function ViralHookGenerator() {
           {/* XP AWARD NOTIFICATION */}
           {xpAwarded && !isSpinning && (
             <div className="mt-[12px] text-center py-[6px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full font-sans font-[700] text-[11px] uppercase tracking-widest animate-pulse">
-              🎉 +20 Creator XP dodan!
+              🎉 +{HOOK_XP} Creator XP dodan! (jednom dnevno)
             </div>
           )}
 
@@ -197,10 +220,10 @@ export default function ViralHookGenerator() {
                   <div key={i} className="bg-[#0E1420] border border-[rgba(255,255,255,0.04)] rounded-[12px] p-[12px] flex justify-between items-start gap-[12px]">
                     <p className="font-sans text-[12px] text-[#FFFFFF]/80 leading-[1.5] italic">{h}</p>
                     <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(h);
-                        alert('Kopirano!');
+                      onClick={async () => {
+                        if (await copyText(h)) toast('Kopirano!', 'success');
                       }}
+                      aria-label="Kopiraj udicu"
                       className="p-1.5 bg-[rgba(255,255,255,0.05)] rounded-md hover:bg-[rgba(255,255,255,0.1)] text-[#8B8FA8] transition-colors"
                     >
                       <Copy className="w-3 h-3" />

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { db, storage } from '../lib/firebase';
-import { collection, addDoc, onSnapshot, doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { db } from '../lib/firebase';
+import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, where, increment } from 'firebase/firestore';
+import { prepareVideo, uploadMedia, mediaPath, deleteMediaByUrl, uploadErrorMessage, safeUrl } from '../lib/media';
+import { toast, confirmDialog } from '../lib/dialog';
 import { createNotification } from '../lib/notifications';
 import { cn } from '../lib/utils';
 import { 
@@ -28,6 +29,7 @@ export interface VideoSubmission {
   lectureTitle: string;
   videoLink: string;
   videoFileUrl?: string;
+  videoPath?: string; // set when the video was uploaded to our Storage
   description?: string;
   isPublic: boolean; // Checked = visible to everyone once graded; Unchecked = private (only student and mentor)
   status: 'pending' | 'graded';
@@ -38,9 +40,13 @@ export interface VideoSubmission {
   createdAt: string;
 }
 
+// Homework videos may be up to 10 minutes long
+const SUBMISSION_MAX_SECONDS = 600;
+
 // Helper to render responsive video embed or link
 function VideoPlayer({ url, title }: { url: string; title?: string }) {
-  if (!url) return null;
+  const safe = safeUrl(url);
+  if (!safe) return null;
 
   // YouTube embed
   const ytMatch = url.match(/(?:youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]{11})/);
@@ -82,6 +88,7 @@ function VideoPlayer({ url, title }: { url: string; title?: string }) {
           src={url} 
           controls 
           playsInline
+          preload="metadata"
           className="w-full h-full object-contain"
         >
           Vaš preglednik ne podržava reprodukciju videa.
@@ -93,7 +100,7 @@ function VideoPlayer({ url, title }: { url: string; title?: string }) {
   // Generic link fallback button
   return (
     <a
-      href={url}
+      href={safe}
       target="_blank"
       rel="noreferrer"
       className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-xl text-xs font-bold transition-all group"
@@ -108,6 +115,7 @@ function VideoPlayer({ url, title }: { url: string; title?: string }) {
 export default function Submissions() {
   const { user: currentUser, profile, updateLocalProfile } = useAuth();
   const isAdmin = profile?.isAdmin === true;
+  const isStaff = isAdmin || profile?.isCreator === true;
 
   const [courses, setCourses] = useState<Lecture[]>([]);
   const [submissions, setSubmissions] = useState<VideoSubmission[]>([]);
@@ -123,6 +131,8 @@ export default function Submissions() {
   const [isPublic, setIsPublic] = useState(true); // default true for community learning, but user can uncheck for private
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadPhase, setUploadPhase] = useState<'compressing' | 'uploading' | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
@@ -135,142 +145,134 @@ export default function Submissions() {
   // Community filter
   const [communityFilterGrade, setCommunityFilterGrade] = useState<number | 'all'>('all');
 
+  // Admin mode may switch after the profile loads
   useEffect(() => {
-    // Load courses for dropdown selection
-    const unsubCourses = onSnapshot(collection(db, 'courses'), (snap) => {
-      if (snap.empty) {
-        import('../lib/firebase-mock').then(({ SEED_COURSES }) => {
-          setCourses(SEED_COURSES as any[]);
-        });
-      } else {
-        setCourses(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lecture)));
-      }
-    }, (err) => {
-      console.warn('[Submissions] Courses fetch error, using mock fallback:', err);
-      import('../lib/firebase-mock').then(({ SEED_COURSES }) => {
-        setCourses(SEED_COURSES as any[]);
-      });
-    });
+    setActiveTab(isAdmin ? 'pending' : 'novi');
+  }, [isAdmin]);
 
-    // Load submissions live
-    const unsubSubmissions = onSnapshot(collection(db, 'submissions'), (snap) => {
-      const all = snap.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          // default isPublic to false if not explicitly set on legacy submissions
-          isPublic: data.isPublic !== undefined ? data.isPublic : false
-        } as VideoSubmission;
-      });
-      // Sort: newest first
+  useEffect(() => {
+    if (!currentUser) return;
+
+    // Lessons for the dropdown
+    const unsubCourses = onSnapshot(collection(db, 'courses'), (snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Lecture & { daysToUnlock?: number }));
+      list.sort((a, b) => (a.daysToUnlock ?? 0) - (b.daysToUnlock ?? 0) || a.id.localeCompare(b.id, undefined, { numeric: true }));
+      setCourses(list);
+    }, (err) => console.warn('[Submissions] Courses fetch error:', err));
+
+    // Rules only let a student read their own submissions plus graded public ones,
+    // so non-staff users combine two filtered listeners.
+    const sources = new Map<string, VideoSubmission[]>();
+    const publish = () => {
+      const byId = new Map<string, VideoSubmission>();
+      sources.forEach(list => list.forEach(s => byId.set(s.id, s)));
+      const all = [...byId.values()];
       all.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       setSubmissions(all);
-    }, (err) => {
-      console.warn('[Submissions] Submissions fetch error, using empty fallback:', err);
-      setSubmissions([]);
-    });
+      setLoadError(false);
+    };
+    const listen = (key: string, q: ReturnType<typeof query> | ReturnType<typeof collection>) =>
+      onSnapshot(q, (snap) => {
+        sources.set(key, snap.docs.map(d => {
+          const data = d.data() as Omit<VideoSubmission, 'id'>;
+          return { ...data, id: d.id, isPublic: data.isPublic === true } as VideoSubmission;
+        }));
+        publish();
+      }, (err) => {
+        console.warn(`[Submissions] ${key} fetch error:`, err);
+        setLoadError(true);
+      });
+
+    const unsubs = isStaff
+      ? [listen('all', collection(db, 'submissions'))]
+      : [
+          listen('own', query(collection(db, 'submissions'), where('userId', '==', currentUser.uid))),
+          listen('public', query(collection(db, 'submissions'), where('status', '==', 'graded'), where('isPublic', '==', true))),
+        ];
 
     return () => {
       unsubCourses();
-      unsubSubmissions();
+      unsubs.forEach(u => u());
     };
-  }, []);
+  }, [currentUser, isStaff]);
 
   const handleFileUploadAndSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser || !profile) return;
+    if (!currentUser || !profile || submitting) return;
     if (!selectedLectureId) {
-      alert('Molimo odaberite seminar ili temu.');
+      toast('Odaberi lekciju ili temu.', 'error');
       return;
     }
 
-    let finalVideoUrl = videoLink.trim();
+    let finalVideoUrl = '';
+    let videoPath: string | null = null;
 
     if (uploadMode === 'file') {
       if (!uploadFile) {
-        alert('Molimo odaberite video datoteku za prijenos.');
+        toast('Odaberi video datoteku za prijenos.', 'error');
         return;
       }
     } else {
-      if (!finalVideoUrl) {
-        alert('Molimo unesite poveznicu na video.');
+      const link = safeUrl(videoLink);
+      if (!link || !link.startsWith('https://')) {
+        toast('Unesi ispravan https:// link na video.', 'error');
         return;
       }
+      finalVideoUrl = link;
     }
 
     setSubmitting(true);
     setSubmitSuccess(false);
 
     try {
-      // If user is uploading a video file directly
       if (uploadMode === 'file' && uploadFile) {
-        setUploadProgress(10);
-        try {
-          const storageRef = ref(storage, `submissions/${currentUser.uid}/${Date.now()}_${uploadFile.name}`);
-          const uploadTask = uploadBytesResumable(storageRef, uploadFile);
-
-          await new Promise<void>((resolve, reject) => {
-            uploadTask.on(
-              'state_changed',
-              (snapshot) => {
-                const prog = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-                setUploadProgress(prog);
-              },
-              (err) => {
-                console.warn('Storage upload error, continuing fallback:', err);
-                // Fallback for mock/local environments without actual storage bucket configured
-                finalVideoUrl = URL.createObjectURL(uploadFile);
-                resolve();
-              },
-              async () => {
-                try {
-                  finalVideoUrl = await getDownloadURL(uploadTask.snapshot.ref);
-                  resolve();
-                } catch {
-                  finalVideoUrl = URL.createObjectURL(uploadFile);
-                  resolve();
-                }
-              }
-            );
-          });
-        } catch (uploadErr) {
-          console.warn('Upload fallback to object URL:', uploadErr);
-          finalVideoUrl = URL.createObjectURL(uploadFile);
-        }
+        setUploadPhase('compressing');
+        setUploadProgress(0);
+        const { blob } = await prepareVideo(uploadFile, {
+          maxDuration: isStaff ? undefined : SUBMISSION_MAX_SECONDS,
+          onProgress: p => setUploadProgress(Math.round(p * 100)),
+        });
+        setUploadPhase('uploading');
+        setUploadProgress(0);
+        videoPath = mediaPath(`submissions/${currentUser.uid}`, blob.type);
+        finalVideoUrl = await uploadMedia(videoPath, blob, p => setUploadProgress(Math.round(p * 100))).promise;
       }
 
       const selectedCourse = courses.find(c => c.id === selectedLectureId);
-      const lectureTitle = selectedCourse 
-        ? selectedCourse.title 
+      const lectureTitle = selectedCourse
+        ? selectedCourse.title
         : (selectedLectureId === 'custom' ? 'Slobodni rad / Vlastiti projekt' : 'Opći video uradak');
 
       const submissionData = {
         userId: currentUser.uid,
         username: profile.username || 'Kreator',
-        userAvatar: profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`,
+        userAvatar: profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(profile.username || currentUser.uid)}`,
         lectureId: selectedLectureId,
         lectureTitle,
         videoLink: finalVideoUrl,
-        description: description.trim(),
+        ...(videoPath ? { videoPath } : {}),
+        description: description.trim().slice(0, 2000),
         isPublic: Boolean(isPublic),
         status: 'pending' as const,
         createdAt: new Date().toISOString()
       };
 
-      // Add document to Firestore
-      await addDoc(collection(db, 'submissions'), submissionData);
+      try {
+        await addDoc(collection(db, 'submissions'), submissionData);
+      } catch (err) {
+        // Don't leave an orphaned upload behind
+        if (videoPath) await deleteMediaByUrl(finalVideoUrl);
+        throw err;
+      }
 
-      // Increment student's weekly post count
-      const newPostCount = (profile.weeklyPostCount || 0) + 1;
-      updateLocalProfile({ weeklyPostCount: newPostCount });
+      updateLocalProfile({ weeklyPostCount: (profile.weeklyPostCount || 0) + 1 });
 
       setSubmitSuccess(true);
+      toast('Video je predan! Mentor će ga uskoro ocijeniti.', 'success');
       setSelectedLectureId('');
       setVideoLink('');
       setDescription('');
       setUploadFile(null);
-      setUploadProgress(null);
       setIsPublic(true);
 
       setTimeout(() => {
@@ -279,72 +281,81 @@ export default function Submissions() {
       }, 2000);
     } catch (err) {
       console.error('Submission failed:', err);
-      alert('Došlo je do pogreške pri predaji videa.');
+      toast(uploadErrorMessage(err), 'error');
     } finally {
       setSubmitting(false);
       setUploadProgress(null);
+      setUploadPhase(null);
     }
   };
 
   const handleGradeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profile || !selectedSubmission) return;
+    if (!profile || !selectedSubmission || grading) return;
 
     setGrading(true);
+    const firstGrade = selectedSubmission.status !== 'graded';
 
     try {
-      const subRef = doc(db, 'submissions', selectedSubmission.id);
-      await setDoc(subRef, {
+      await updateDoc(doc(db, 'submissions', selectedSubmission.id), {
         status: 'graded',
         grade,
         feedback: feedback.trim(),
         gradedBy: profile.username || 'Mentor',
         gradedAt: new Date().toISOString()
-      }, { merge: true });
+      });
 
-      // Award XP to student (+100 XP)
-      try {
-        const studentRef = doc(db, 'profiles', selectedSubmission.userId);
-        const studentSnap = await getDoc(studentRef);
-        if (studentSnap.exists()) {
-          const studentData = studentSnap.data();
-          await setDoc(studentRef, {
-            xp: (studentData.xp || 0) + 100
-          }, { merge: true });
-        }
-      } catch (xpErr) {
-        console.warn('XP update error:', xpErr);
+      // +100 XP only the first time a submission is graded
+      if (firstGrade) {
+        updateDoc(doc(db, 'profiles', selectedSubmission.userId), { xp: increment(100) })
+          .catch(xpErr => console.warn('XP update error:', xpErr));
       }
 
-      // Send notification to student
-      await createNotification({
+      createNotification({
         recipientId: selectedSubmission.userId,
         senderId: currentUser?.uid || 'system',
         senderName: profile.username || 'Mentor',
-        senderAvatar: profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`,
+        senderAvatar: profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(profile.username || 'mentor')}`,
         type: 'comment',
-        message: `Mentor ${profile.username} je ocijenio tvoj video za: ${selectedSubmission.lectureTitle} (Ocjena: ${grade}/5)`,
+        message: `Mentor ${profile.username} je ${firstGrade ? 'ocijenio' : 'ažurirao ocjenu za'} tvoj video: ${selectedSubmission.lectureTitle} (${grade}/5)`,
         postId: null
-      });
+      }).catch(err => console.warn('Notification error:', err));
 
+      toast(firstGrade ? 'Ocjena je spremljena.' : 'Ocjena je ažurirana.', 'success');
       setSelectedSubmission(null);
       setFeedback('');
       setGrade(5);
     } catch (err) {
       console.error('Grading failed:', err);
-      alert('Došlo je do pogreške pri ocjenjivanju.');
+      toast('Ocjena se nije spremila. Pokušaj ponovno.', 'error');
     } finally {
       setGrading(false);
     }
   };
 
-  const handleDeleteSubmission = async (id: string) => {
-    if (!confirm('Jeste li sigurni da želite obrisati ovu predaju?')) return;
+  const handleDeleteSubmission = async (sub: VideoSubmission) => {
+    const ok = await confirmDialog('Obrisati ovu predaju? Video i ocjena bit će trajno uklonjeni.', {
+      confirmLabel: 'Obriši',
+      danger: true,
+    });
+    if (!ok) return;
     try {
-      await deleteDoc(doc(db, 'submissions', id));
+      await deleteDoc(doc(db, 'submissions', sub.id));
+      if (sub.videoPath) await deleteMediaByUrl(sub.videoLink);
+      toast('Predaja je obrisana.', 'success');
     } catch (err) {
       console.error('Delete failed:', err);
-      alert('Pogreška pri brisanju predaje.');
+      toast('Brisanje nije uspjelo.', 'error');
+    }
+  };
+
+  const handleTogglePublic = async (sub: VideoSubmission) => {
+    try {
+      await updateDoc(doc(db, 'submissions', sub.id), { isPublic: !sub.isPublic });
+      toast(sub.isPublic ? 'Video je sada privatan.' : 'Video je sada javan.', 'success');
+    } catch (err) {
+      console.error('Visibility update failed:', err);
+      toast('Promjena vidljivosti nije uspjela.', 'error');
     }
   };
 
@@ -377,6 +388,13 @@ export default function Submissions() {
             : 'Predaj svoje uratke, preuzmi povratne informacije mentora ili uči iz javnih radova zajednice.'}
         </p>
       </header>
+
+      {loadError && (
+        <div role="alert" className="mb-6 flex items-center gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          <AlertCircle className="w-5 h-5 shrink-0 text-red-400" />
+          Predaje se nisu mogle učitati. Provjeri vezu i osvježi stranicu.
+        </div>
+      )}
 
       {/* Tabs Navigation */}
       <div className="flex flex-wrap gap-1 p-1 bg-[#151E30] rounded-2xl border border-white/5 mb-8">
@@ -554,22 +572,23 @@ export default function Submissions() {
                     <span className="text-sm font-bold text-white">
                       {uploadFile ? uploadFile.name : 'Kliknite za odabir video datoteke'}
                     </span>
-                    <span className="text-xs text-muted-foreground mt-1">MP4, WebM ili MOV (maks. 250MB)</span>
+                    <span className="text-xs text-muted-foreground mt-1 text-center">MP4, MOV ili WebM, do 10 min — video se automatski smanjuje prije slanja</span>
                     <input
                       type="file"
                       accept="video/*"
                       className="hidden"
+                      disabled={submitting}
                       onChange={e => {
-                        if (e.target.files && e.target.files[0]) {
-                          setUploadFile(e.target.files[0]);
-                        }
+                        const file = e.target.files?.[0];
+                        if (file) setUploadFile(file);
+                        e.target.value = '';
                       }}
                     />
                   </label>
                   {uploadProgress !== null && (
                     <div className="space-y-1">
                       <div className="flex justify-between text-xs text-primary font-bold">
-                        <span>Prijenos videa...</span>
+                        <span>{uploadPhase === 'compressing' ? 'Priprema i kompresija videa...' : 'Prijenos videa...'}</span>
                         <span>{uploadProgress}%</span>
                       </div>
                       <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
@@ -610,6 +629,7 @@ export default function Submissions() {
                   type="checkbox"
                   checked={isPublic}
                   onChange={e => setIsPublic(e.target.checked)}
+                  onClick={e => e.stopPropagation()}
                   className="w-5 h-5 rounded accent-emerald-500 cursor-pointer"
                 />
               </div>
@@ -711,9 +731,18 @@ export default function Submissions() {
 
                   <div className="flex items-center gap-3 text-xs text-muted-foreground font-mono">
                     <span>Predano: {new Date(sub.createdAt).toLocaleDateString('hr-HR')}</span>
+                    {sub.status === 'graded' && (
+                      <button
+                        onClick={() => handleTogglePublic(sub)}
+                        className="text-[#8B8FA8] hover:text-white transition-colors px-2 py-1 rounded-lg border border-white/10 text-[10px] font-bold uppercase"
+                        title={sub.isPublic ? 'Sakrij iz javnih radova' : 'Podijeli u javne radove'}
+                      >
+                        {sub.isPublic ? 'Učini privatnim' : 'Učini javnim'}
+                      </button>
+                    )}
                     {sub.status === 'pending' && (
                       <button 
-                        onClick={() => handleDeleteSubmission(sub.id)}
+                        onClick={() => handleDeleteSubmission(sub)}
                         className="text-red-400 hover:text-red-300 transition-colors p-1"
                         title="Obriši predaju"
                       >
@@ -981,7 +1010,7 @@ export default function Submissions() {
                   </div>
 
                   <a 
-                    href={sub.videoLink} 
+                    href={safeUrl(sub.videoLink) || undefined} 
                     target="_blank" 
                     rel="noreferrer" 
                     className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline font-bold"
@@ -1050,7 +1079,7 @@ export default function Submissions() {
                   </div>
 
                   <h3 className="text-base font-bold text-white uppercase">{sub.lectureTitle}</h3>
-                  <a href={sub.videoLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-[#3B82F6] hover:underline">
+                  <a href={safeUrl(sub.videoLink) || undefined} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-[#3B82F6] hover:underline">
                     Gledaj video <ExternalLink className="w-3 h-3" />
                   </a>
 

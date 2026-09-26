@@ -9,38 +9,32 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 export default defineConfig({
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: (id) => (id.includes('node_modules/mediabunny') ? 'mediabunny' : undefined),
+      },
+    },
+  },
   plugins: [
     react(),
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
-      manifest: {
-        name: 'Creator Akademija',
-        short_name: 'CA',
-        description: 'Creator Akademija od Ismaela Hadžića. Postani kreator kojeg ljudi vole gledati, dijeliti i pamtiti.',
-        theme_color: '#18181E',
-        icons: [
-          {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png'
-          }
-        ]
-      },
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
+      // index.html links public/manifest.json — don't generate a second one
+      manifest: false,
       workbox: {
         navigateFallback: '/index.html',
         navigateFallbackAllowlist: [/^(?!\/__).*/],
         cleanupOutdatedCaches: true,
+        // The video converter is only needed when someone uploads a video
+        globIgnores: ['**/mediabunny-*.js'],
         runtimeCaching: [
           {
             urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/,
-            handler: 'CacheFirst',
+            // Revalidate so replaced lesson posters / logos show up
+            handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'images-cache',
               expiration: {
@@ -49,18 +43,7 @@ export default defineConfig({
               },
             },
           },
-          {
-            urlPattern: /\.(?:mp4|webm|ogg)$/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'videos-cache',
-              rangeRequests: true,
-              expiration: {
-                maxEntries: 20,
-                maxAgeSeconds: 60 * 24 * 60 * 60, // 60 Days
-              },
-            },
-          },
+          // Videos are streamed with Range requests straight from the network (no SW cache)
           {
             urlPattern: /^https:\/\/(?:fonts\.googleapis\.com|fonts\.gstatic\.com|images\.unsplash\.com|api\.dicebear\.com)/,
             handler: 'StaleWhileRevalidate',

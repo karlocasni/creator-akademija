@@ -1,12 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Archive, ArrowLeft, Plus, Copy, Check, Heart, X, ChevronDown } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Archive, ArrowLeft, Plus, Copy, Check, Heart, X, ChevronDown, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { bottomNavEventTarget } from '../components/layout/BottomNav';
 import { db } from '../lib/firebase';
 import {
-  collection, addDoc, onSnapshot, updateDoc, doc, serverTimestamp, query, orderBy
+  collection, addDoc, onSnapshot, updateDoc, doc, serverTimestamp, arrayUnion, arrayRemove, increment,
 } from 'firebase/firestore';
+import { toast } from '../lib/dialog';
 
 const KATEGORIJE = ['Radoznalost', 'Kontroverza', 'Priča', 'Šok', 'Humor', 'Pitanje', 'Lista'];
 const NIŠE = ['Lifestyle', 'Fitness', 'Edukacija', 'Humor', 'Gaming', 'Glazba', 'Hrana', 'Putovanja', 'Moda', 'Biznis', 'Motivacija', 'Općenito'];
@@ -14,6 +15,10 @@ const NIŠE = ['Lifestyle', 'Fitness', 'Edukacija', 'Humor', 'Gaming', 'Glazba',
 type FilterType = 'Sve' | typeof KATEGORIJE[number];
 type SortType = 'liked' | 'newest';
 
+/**
+ * Stored shape (firestore.rules): `likedBy` = uids that liked, `likes` = counter.
+ * Older docs kept the uid array in `likes` plus a `likeCount` — normalised on read.
+ */
 interface HookItem {
   id: string;
   hookText: string;
@@ -22,10 +27,37 @@ interface HookItem {
   zastoRadi: string;
   authorId: string;
   authorName: string;
-  likes: string[];
+  likedBy: string[];
   likeCount: number;
+  /** true when `likes` is still the legacy uid array (not a number) */
+  legacyLikes: boolean;
   createdAt: any;
 }
+
+const HOOK_XP = 15;
+
+const normalizeHook = (id: string, data: Record<string, any>): HookItem => {
+  const legacyLikes = Array.isArray(data.likes);
+  const likedBy: string[] = Array.isArray(data.likedBy) ? data.likedBy : [];
+  const likeCount = typeof data.likes === 'number'
+    ? data.likes
+    : typeof data.likeCount === 'number' ? data.likeCount : (legacyLikes ? data.likes.length : likedBy.length);
+  return {
+    id,
+    hookText: data.hookText || '',
+    kategorija: data.kategorija || 'Radoznalost',
+    nisa: data.nisa || 'Općenito',
+    zastoRadi: data.zastoRadi || '',
+    authorId: data.authorId || '',
+    authorName: data.authorName || 'Korisnik',
+    likedBy,
+    likeCount: Math.max(0, likeCount),
+    legacyLikes,
+    createdAt: data.createdAt,
+  };
+};
+
+const normalizeText = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
 
 const KATEGORIJA_COLORS: Record<string, string> = {
   Radoznalost: '#6366F1',
@@ -47,6 +79,9 @@ export default function HookVault() {
   const [showForm, setShowForm] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [xpAwarded, setXpAwarded] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const likeBusyRef = useRef<Set<string>>(new Set());
 
   // Form state
   const [hookText, setHookText] = useState('');
@@ -63,70 +98,91 @@ export default function HookVault() {
   }, []);
 
   useEffect(() => {
-    const q = query(collection(db, 'hookVault'));
-    const unsub = onSnapshot(q, snap => {
-      if (snap.empty) {
-        import('../lib/firebase-mock').then(({ SEED_HOOK_VAULT }) => {
-          setHooks(SEED_HOOK_VAULT as any[]);
-        });
-      } else {
-        const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as HookItem));
-        setHooks(items);
-      }
-    });
+    const unsub = onSnapshot(
+      collection(db, 'hookVault'),
+      snap => {
+        setHooks(snap.docs.map(d => normalizeHook(d.id, d.data())));
+        setLoadError(null);
+        setLoading(false);
+      },
+      err => {
+        console.error('[HookVault] Listener failed:', err);
+        setLoadError((err as { code?: string }).code === 'permission-denied'
+          ? 'Hook Vault je dostupan samo aktivnim članovima.'
+          : 'Hookovi se nisu mogli učitati. Provjeri vezu i osvježi stranicu.');
+        setLoading(false);
+      },
+    );
     return unsub;
   }, []);
 
   const handleAddHook = async () => {
-    if (!hookText.trim() || !user || submitting) return;
+    const text = hookText.trim();
+    if (!text || !user || submitting) return;
+    // Same hook twice = no second XP (and no duplicate in the vault)
+    if (hooks.some(h => normalizeText(h.hookText) === normalizeText(text))) {
+      toast('Ovaj hook je već u Vaultu.', 'info');
+      return;
+    }
     setSubmitting(true);
     try {
       await addDoc(collection(db, 'hookVault'), {
-        hookText: hookText.trim(),
+        hookText: text,
         kategorija,
         nisa,
         zastoRadi: zastoRadi.trim(),
         authorId: user.uid,
         authorName: profile?.username || 'Korisnik',
-        likes: [],
-        likeCount: 0,
+        likes: 0,
+        likedBy: [],
         createdAt: serverTimestamp(),
       });
+      // XP once per saved hook
       if (profile) {
-        updateLocalProfile({ xp: profile.xp + 15 });
+        updateLocalProfile({ xp: (profile.xp || 0) + HOOK_XP });
       }
       setXpAwarded(true);
       setTimeout(() => setXpAwarded(false), 3000);
       setHookText('');
       setZastoRadi('');
       setShowForm(false);
-    } catch (e) {
-      console.error('Failed to add hook:', e);
+    } catch (err) {
+      console.error('[HookVault] Failed to add hook:', err);
+      toast('Hook nije spremljen. Pokušaj ponovno.', 'error');
     } finally {
       setSubmitting(false);
     }
   };
 
+  // Only my uid is toggled in likedBy and the counter moves by exactly one (firestore.rules)
   const handleLike = async (hook: HookItem) => {
-    if (!user) return;
-    const liked = hook.likes?.includes(user.uid);
-    const newLikes = liked
-      ? (hook.likes || []).filter((id: string) => id !== user.uid)
-      : [...(hook.likes || []), user.uid];
+    if (!user || likeBusyRef.current.has(hook.id)) return;
+    const liked = hook.likedBy.includes(user.uid);
+    likeBusyRef.current.add(hook.id);
     try {
       await updateDoc(doc(db, 'hookVault', hook.id), {
-        likes: newLikes,
-        likeCount: newLikes.length,
+        likedBy: liked ? arrayRemove(user.uid) : arrayUnion(user.uid),
+        // Legacy docs still hold an array in `likes`: replace it with the count
+        likes: hook.legacyLikes
+          ? Math.max(0, hook.likeCount + (liked ? -1 : 1))
+          : increment(liked ? -1 : 1),
       });
-    } catch (e) {
-      console.error('Like failed:', e);
+    } catch (err) {
+      console.error('[HookVault] Like failed:', err);
+      toast('Lajk nije spremljen. Pokušaj ponovno.', 'error');
+    } finally {
+      likeBusyRef.current.delete(hook.id);
     }
   };
 
-  const handleCopy = (id: string, text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(id);
-    setTimeout(() => setCopied(null), 2000);
+  const handleCopy = async (id: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(id);
+      setTimeout(() => setCopied(null), 2000);
+    } catch {
+      toast('Kopiranje nije uspjelo.', 'error');
+    }
   };
 
   const filtered = hooks
@@ -168,7 +224,7 @@ export default function HookVault() {
         {/* XP TOAST */}
         {xpAwarded && (
           <div className="text-center py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full font-mono font-bold text-[11px] uppercase tracking-widest animate-pulse">
-            🎉 +15 Creator XP dodan!
+            🎉 +{HOOK_XP} Creator XP dodan!
           </div>
         )}
 
@@ -176,7 +232,7 @@ export default function HookVault() {
         {showForm && (
           <div className="bg-[#151E30] rounded-[24px] border border-[rgba(59,130,246,0.2)] p-[20px] flex flex-col gap-4">
             <div className="flex items-center justify-between mb-1">
-              <h2 className="font-heading font-[800] text-[15px] text-white uppercase">Dodaj Hook (+15 XP)</h2>
+              <h2 className="font-heading font-[800] text-[15px] text-white uppercase">Dodaj Hook (+{HOOK_XP} XP)</h2>
               <button onClick={() => setShowForm(false)} className="text-[#8B8FA8] hover:text-white">
                 <X className="w-5 h-5" />
               </button>
@@ -271,7 +327,16 @@ export default function HookVault() {
         </div>
 
         {/* HOOKS LIST */}
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div className="flex justify-center py-8">
+            <div className="w-8 h-8 border-4 border-[#3B82F6] border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : loadError ? (
+          <div className="bg-red-500/10 border border-red-500/20 rounded-[20px] p-4 flex items-start gap-3 text-red-200 text-[13px]">
+            <AlertCircle className="w-5 h-5 shrink-0 text-red-400" />
+            <span>{loadError}</span>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="bg-[#151E30] rounded-[24px] border border-[rgba(255,255,255,0.06)] p-10 text-center">
             <Archive className="w-10 h-10 text-[#4A4A5A] mx-auto mb-3" />
             <p className="text-[#8B8FA8] text-[14px]">Još nema hookova u ovoj kategoriji.</p>
@@ -280,7 +345,7 @@ export default function HookVault() {
         ) : (
           <div className="flex flex-col gap-3">
             {filtered.map(hook => {
-              const isLiked = user && hook.likes?.includes(user.uid);
+              const isLiked = !!user && hook.likedBy.includes(user.uid);
               const tagColor = KATEGORIJA_COLORS[hook.kategorija] || '#8B8FA8';
               return (
                 <div

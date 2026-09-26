@@ -20,37 +20,45 @@ import { useAuth } from '../../contexts/AuthContext';
 import { FirestoreComment } from '../../types/post';
 import { awardXP } from '../../lib/xp';
 import { createNotification, createMentionNotifications } from '../../lib/notifications';
+import { toast, confirmDialog } from '../../lib/dialog';
 import { useMemberSearch } from '../../hooks/useMemberSearch';
 import MentionDropdown from '../ui/MentionDropdown';
 
+const COMMENT_MAX = 2000;
+/** Comments shorter than this don't earn XP (no "ok" / emoji farming). */
+const COMMENT_XP_MIN_CHARS = 20;
+const COMMENT_XP = 10;
+
+const MENTION_CHARS = '[\\p{L}\\p{N}._-]';
+const ACTIVE_MENTION = new RegExp(`@(${MENTION_CHARS}*)$`, 'u');
+const MENTION_SPLIT = new RegExp(`(@${MENTION_CHARS}+)`, 'gu');
+const MENTION_WHOLE = new RegExp(`^@${MENTION_CHARS}+$`, 'u');
+
 function getActiveMention(text: string, cursorPos: number): string | null {
-  const before = text.slice(0, cursorPos);
-  const match = before.match(/@(\w*)$/);
+  const match = text.slice(0, cursorPos).match(ACTIVE_MENTION);
   return match ? match[1] : null;
 }
 
 function replaceMention(text: string, cursorPos: number, username: string): string {
   const before = text.slice(0, cursorPos);
   const after = text.slice(cursorPos);
-  const newBefore = before.replace(/@\w*$/, `@${username} `);
-  return newBefore + after;
+  return before.replace(ACTIVE_MENTION, `@${username} `) + after;
 }
 
 function renderWithMentions(content: string): React.ReactNode {
-  const parts = content.split(/(@\w+)/g);
-  return parts.map((part, i) =>
-    /^@\w+$/.test(part) ? (
-      <Link
-        key={i}
-        to={`/profile/u/${part.slice(1)}`}
-        className="text-primary font-bold hover:underline"
-      >
-        {part}
-      </Link>
-    ) : (
-      part
-    ),
-  );
+  return content.split(MENTION_SPLIT).map((part, i) => {
+    if (!MENTION_WHOLE.test(part)) return part;
+    const name = part.slice(1).replace(/[._-]+$/, '');
+    const tail = part.slice(1 + name.length);
+    return (
+      <span key={i}>
+        <Link to={`/profile/u/${encodeURIComponent(name)}`} className="text-primary font-bold hover:underline">
+          @{name}
+        </Link>
+        {tail}
+      </span>
+    );
+  });
 }
 
 interface CommentSectionProps {
@@ -64,6 +72,8 @@ export default function CommentSection({ postId, postAuthorId }: CommentSectionP
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [loadingComments, setLoadingComments] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [pendingLikes, setPendingLikes] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [activeMention, setActiveMention] = useState<string | null>(null);
@@ -82,18 +92,21 @@ export default function CommentSection({ postId, postAuthorId }: CommentSectionP
           snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as FirestoreComment)),
         );
         setLoadingComments(false);
+        setLoadError(false);
       },
       (error) => {
         console.warn('Comments snapshot error:', error.code);
         setLoadingComments(false);
+        setLoadError(true);
       },
     );
     return unsubscribe;
   }, [postId]);
 
+  const myName = profile?.username || 'Kreator';
   const avatarUrl =
     profile?.avatar_url ||
-    `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile?.username || 'user'}`;
+    `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(myName)}`;
 
   const handleCommentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -113,8 +126,7 @@ export default function CommentSection({ postId, postAuthorId }: CommentSectionP
 
   const handleMentionSelect = (username: string) => {
     const cursor = inputRef.current?.selectionStart ?? comment.length;
-    const newComment = replaceMention(comment, cursor, username);
-    setComment(newComment);
+    setComment(replaceMention(comment, cursor, username));
     setActiveMention(null);
     inputRef.current?.focus();
   };
@@ -122,81 +134,84 @@ export default function CommentSection({ postId, postAuthorId }: CommentSectionP
   const handleSubmit = async () => {
     if (!comment.trim() || !user || submitting) return;
     setSubmitting(true);
-    const trimmed = comment.trim();
+    const trimmed = comment.trim().slice(0, COMMENT_MAX);
     setComment('');
     setActiveMention(null);
 
     try {
       await addDoc(collection(db, 'posts', postId, 'comments'), {
         authorId: user.uid,
-        authorName: profile?.username || 'Projekt90 Član',
+        authorName: myName,
         authorAvatar: avatarUrl,
         content: trimmed,
         createdAt: serverTimestamp(),
       });
 
-      updateDoc(doc(db, 'posts', postId), {
-        commentsCount: increment(1),
-      }).catch((err) => console.warn('Failed to update commentsCount:', err));
+      // Counter write must touch only commentsCount (rules: exactly ±1)
+      updateDoc(doc(db, 'posts', postId), { commentsCount: increment(1) })
+        .catch((err) => console.warn('Failed to update commentsCount:', err));
 
-      if (profile) {
-        awardXP(user.uid, 10, profile.xp ?? 0).catch((err) =>
-          console.warn('XP award failed:', err),
-        );
+      if (trimmed.length >= COMMENT_XP_MIN_CHARS) {
+        awardXP(user.uid, COMMENT_XP).catch((err) => console.warn('XP award failed:', err));
+      }
 
-        const senderName = profile.username || 'Projekt90 Član';
+      createMentionNotifications(trimmed, user.uid, myName, avatarUrl, postId)
+        .catch((err) => console.warn('Mention notifications failed:', err));
 
-        createMentionNotifications(
-          trimmed,
-          user.uid,
-          senderName,
-          avatarUrl,
+      if (user.uid !== postAuthorId) {
+        createNotification({
+          recipientId: postAuthorId,
+          senderId: user.uid,
+          senderName: myName,
+          senderAvatar: avatarUrl,
+          type: 'comment',
+          message: `${myName} je komentirao tvoju objavu`,
           postId,
-        ).catch((err) => console.warn('Mention notifications failed:', err));
-
-        if (user.uid !== postAuthorId) {
-          createNotification({
-            recipientId: postAuthorId,
-            senderId: user.uid,
-            senderName,
-            senderAvatar: avatarUrl,
-            type: 'comment',
-            message: `${senderName} je komentirao tvoju objavu`,
-            postId,
-          }).catch((err) => console.warn('Comment notification failed:', err));
-        }
+        }).catch((err) => console.warn('Comment notification failed:', err));
       }
     } catch (err) {
       console.error('Failed to add comment:', err);
       setComment(trimmed);
+      toast('Komentar nije objavljen. Pokušaj ponovno.', 'error');
     } finally {
       setSubmitting(false);
     }
   };
 
   const deleteComment = async (commentId: string) => {
-    if (!window.confirm('Obrisati komentar?')) return;
+    const ok = await confirmDialog('Obrisati komentar?', { confirmLabel: 'Obriši', danger: true });
+    if (!ok) return;
     try {
       await deleteDoc(doc(db, 'posts', postId, 'comments', commentId));
-      await updateDoc(doc(db, 'posts', postId), {
-        commentsCount: increment(-1),
-      });
     } catch (err) {
       console.error('Delete failed:', err);
+      toast('Brisanje komentara nije uspjelo.', 'error');
+      return;
     }
+    updateDoc(doc(db, 'posts', postId), { commentsCount: increment(-1) })
+      .catch((err) => console.warn('Failed to update commentsCount:', err));
   };
 
   const toggleCommentLike = async (commentId: string, likedBy: string[]) => {
-    if (!user) return;
+    if (!user || pendingLikes.has(commentId)) return;
     const ref = doc(db, 'posts', postId, 'comments', commentId);
     const liked = likedBy.includes(user.uid);
+    setPendingLikes((prev) => new Set(prev).add(commentId));
     try {
+      // Rules: only ['likedBy','likes'] may change and only by the caller's own uid
       await updateDoc(ref, {
         likedBy: liked ? arrayRemove(user.uid) : arrayUnion(user.uid),
         likes: increment(liked ? -1 : 1),
       });
     } catch (err) {
       console.warn('Like failed:', err);
+      toast('Reakcija nije spremljena.', 'error');
+    } finally {
+      setPendingLikes((prev) => {
+        const next = new Set(prev);
+        next.delete(commentId);
+        return next;
+      });
     }
   };
 
@@ -208,62 +223,69 @@ export default function CommentSection({ postId, postAuthorId }: CommentSectionP
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
           </div>
+        ) : loadError ? (
+          <p className="text-xs text-red-400 text-center py-8">
+            Komentari se nisu mogli učitati.
+          </p>
         ) : comments.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-8">
             Još nema komentara. Budi prvi!
           </p>
         ) : (
-          comments.map((c) => (
-            <div key={c.id} className="flex gap-3 relative group">
-              <Link to={user?.uid === c.authorId ? '/profile' : `/profile/${c.authorId}`}>
-                <img
-                  src={c.authorAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${c.authorName}`}
-                  className="w-8 h-8 rounded-full flex-shrink-0 hover:ring-2 ring-primary/50 transition-all object-cover"
-                  alt=""
-                  onError={(e) => {
-                    (e.currentTarget as HTMLImageElement).src =
-                      `https://api.dicebear.com/7.x/avataaars/svg?seed=${c.authorName}`;
-                  }}
-                />
-              </Link>
-              <div className="flex-1 bg-white/5 rounded-2xl px-4 py-3">
-                <div className="flex justify-between items-start">
-                  <Link
-                    to={user?.uid === c.authorId ? '/profile' : `/profile/${c.authorId}`}
-                    className="font-bold text-sm block mb-1 hover:text-primary transition-colors"
-                  >
-                    {c.authorName}
-                  </Link>
-                  {(user?.uid === c.authorId || profile?.isAdmin) && (
-                    <button
-                      onClick={() => deleteComment(c.id)}
-                      className={`text-xs text-red-400 transition-opacity ${
-                        profile?.isAdmin ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                      }`}
-                    >
-                      Obriši
-                    </button>
-                  )}
-                </div>
-                <p className="text-sm text-foreground/80">{renderWithMentions(c.content)}</p>
-                {/* Comment like button */}
-                <button
-                  onClick={() => toggleCommentLike(c.id, (c as any).likedBy || [])}
-                  disabled={!user}
-                  className="flex items-center gap-1 mt-2 text-xs text-muted-foreground hover:text-red-400 transition-colors disabled:opacity-40"
-                >
-                  <Heart
-                    className={`w-3.5 h-3.5 ${
-                      user && ((c as any).likedBy || []).includes(user.uid)
-                        ? 'fill-red-400 text-red-400'
-                        : ''
-                    }`}
+          comments.map((c) => {
+            const likedBy = c.likedBy || [];
+            const fallbackAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(c.authorName || 'Kreator')}`;
+            return (
+              <div key={c.id} className="flex gap-3 relative group">
+                <Link to={user?.uid === c.authorId ? '/profile' : `/profile/${c.authorId}`}>
+                  <img
+                    src={c.authorAvatar || fallbackAvatar}
+                    className="w-8 h-8 rounded-full flex-shrink-0 hover:ring-2 ring-primary/50 transition-all object-cover"
+                    alt={c.authorName}
+                    loading="lazy"
+                    decoding="async"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = fallbackAvatar;
+                    }}
                   />
-                  <span>{(c as any).likes || 0}</span>
-                </button>
+                </Link>
+                <div className="flex-1 bg-white/5 rounded-2xl px-4 py-3 min-w-0">
+                  <div className="flex justify-between items-start">
+                    <Link
+                      to={user?.uid === c.authorId ? '/profile' : `/profile/${c.authorId}`}
+                      className="font-bold text-sm block mb-1 hover:text-primary transition-colors"
+                    >
+                      {c.authorName}
+                    </Link>
+                    {(user?.uid === c.authorId || profile?.isAdmin) && (
+                      <button
+                        onClick={() => deleteComment(c.id)}
+                        className={`text-xs text-red-400 transition-opacity ${
+                          profile?.isAdmin ? 'opacity-100' : 'opacity-100 md:opacity-0 md:group-hover:opacity-100'
+                        }`}
+                      >
+                        Obriši
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-sm text-foreground/80 whitespace-pre-wrap break-words">{renderWithMentions(c.content)}</p>
+                  {/* Comment like button */}
+                  <button
+                    onClick={() => toggleCommentLike(c.id, likedBy)}
+                    disabled={!user || pendingLikes.has(c.id)}
+                    className="flex items-center gap-1 mt-2 text-xs text-muted-foreground hover:text-red-400 transition-colors disabled:opacity-40"
+                  >
+                    <Heart
+                      className={`w-3.5 h-3.5 ${
+                        user && likedBy.includes(user.uid) ? 'fill-red-400 text-red-400' : ''
+                      }`}
+                    />
+                    <span>{Math.max(0, c.likes || 0)}</span>
+                  </button>
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 
@@ -279,13 +301,14 @@ export default function CommentSection({ postId, postAuthorId }: CommentSectionP
       {/* Comment input */}
       <div className="pt-4 border-t border-white/5 bg-[#111116] sticky bottom-0 z-10 flex gap-3">
         <div className="w-8 h-8 rounded-full bg-accent flex-shrink-0 overflow-hidden">
-          <img src={avatarUrl} alt="Me" className="w-full h-full rounded-full" />
+          <img src={avatarUrl} alt={myName} className="w-full h-full rounded-full" />
         </div>
         <div className="flex-1 relative">
           <input
             ref={inputRef}
             type="text"
             value={comment}
+            maxLength={COMMENT_MAX}
             onChange={handleCommentChange}
             onKeyDown={(e) => {
               if (e.key === 'Escape') {
@@ -302,6 +325,7 @@ export default function CommentSection({ postId, postAuthorId }: CommentSectionP
           <button
             onClick={handleSubmit}
             disabled={!comment.trim() || !user || submitting}
+            aria-label="Pošalji komentar"
             className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-primary hover:scale-110 transition-transform disabled:opacity-30"
           >
             {submitting ? (

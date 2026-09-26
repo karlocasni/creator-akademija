@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { UserProfile } from '../../types/post';
-import XPBadge from '../ui/XPBadge';
+import { calculateLevel } from '../../lib/xp';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface LeaderboardEntry {
@@ -33,7 +33,7 @@ export default function Leaderboard() {
               username: data.username || 'Nepoznat',
               avatar_url: data.avatar_url,
               xp: data.xp ?? 0,
-              level: data.level ?? 1,
+              level: calculateLevel(data.xp ?? 0),
             };
           }),
         );
@@ -94,6 +94,8 @@ export default function Leaderboard() {
                       <img
                         src={avatarSrc}
                         alt={entry.username}
+                        loading="lazy"
+                        decoding="async"
                         className="w-full h-full rounded-full object-cover group-hover:scale-105 transition-transform"
                         onError={(e) => {
                           (e.currentTarget as HTMLImageElement).src =

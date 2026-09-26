@@ -2,12 +2,13 @@ import { Link } from 'react-router-dom';
 import { Zap, ShieldCheck, Eye } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 import { useAuth } from '../../contexts/AuthContext';
+
 import { calculateLevel } from '../../lib/xp';
 
 export default function TopBar() {
   const { profile, isActualAdmin, adminMode, toggleAdminRole } = useAuth();
   const xp    = profile?.xp    ?? 0;
-  const level = profile?.level ?? calculateLevel(xp);
+  const level = calculateLevel(xp);
   const xpFormatted = xp.toLocaleString('hr-HR');
 
   return (

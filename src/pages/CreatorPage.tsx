@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Clock, Video, User as UserIcon, Calendar, BookOpen, Sparkles, AlertCircle, ChevronRight, Compass } from 'lucide-react';
+import { ArrowLeft, Clock, Video, Calendar, BookOpen, Sparkles, AlertCircle, ChevronRight, Compass, ExternalLink } from 'lucide-react';
 import { db } from '../lib/firebase';
-import { doc, getDoc, collection, onSnapshot } from 'firebase/firestore';
-import { useAuth } from '../contexts/AuthContext';
+import { doc, getDoc, collection, onSnapshot, query, where } from 'firebase/firestore';
 import { UserProfile } from '../types/post';
 import { cn } from '../lib/utils';
 import { calculateLevel } from '../lib/xp';
+import { safeUrl } from '../lib/media';
 
 interface CalendarEvent {
   id: string;
@@ -15,11 +15,24 @@ interface CalendarEvent {
   type: 'live_qa' | 'guest_lecture' | 'accountability';
   date: string;
   duration: string;
-  zoomLink: string;
+  /** Google Meet (or other https) link. */
+  meetLink?: string;
+  /** Legacy field from before Google Meet — only read as a fallback. */
+  zoomLink?: string;
   speaker: string;
   creatorId?: string;
-  bgImage?: string;
+  bgImage?: string | null;
 }
+
+// Same as Calendar: an event is "past" 3 h after its start
+const EVENT_GRACE_MS = 3 * 60 * 60 * 1000;
+const MEET_RE = /^https:\/\/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}(?:[/?#]|$)/i;
+
+const handle = (value: string) => encodeURIComponent(value.trim().replace(/^@/, ''));
+const cssUrl = (url?: string | null) => {
+  const safe = safeUrl(url);
+  return safe ? `url(${JSON.stringify(safe)})` : undefined;
+};
 
 interface Lecture {
   id: string;
@@ -36,52 +49,64 @@ interface Lecture {
 export default function CreatorPage() {
   const { creatorId } = useParams<{ creatorId: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
 
   const [creator, setCreator] = useState<UserProfile | null>(null);
   const [loadingCreator, setLoadingCreator] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [lectures, setLectures] = useState<Lecture[]>([]);
   const [activeTab, setActiveTab] = useState<'predavanja' | 'tecajevi'>('predavanja');
 
   useEffect(() => {
-    if (!creatorId) return;
+    if (!creatorId) {
+      setLoadingCreator(false);
+      return;
+    }
 
+    let cancelled = false;
     setLoadingCreator(true);
+    setCreator(null);
+    setLoadError(null);
+    setEvents([]);
+    setLectures([]);
+
     // Fetch creator profile
-    const profileRef = doc(db, 'profiles', creatorId);
-    getDoc(profileRef).then((snap) => {
-      if (snap.exists()) {
-        setCreator(snap.data() as UserProfile);
-      }
+    getDoc(doc(db, 'profiles', creatorId)).then((snap) => {
+      if (cancelled) return;
+      setCreator(snap.exists() ? (snap.data() as UserProfile) : null);
       setLoadingCreator(false);
     }).catch((err) => {
-      console.error('Error fetching creator:', err);
+      if (cancelled) return;
+      console.error('[CreatorPage] Error fetching creator:', err);
+      setLoadError('Profil mentora se nije mogao učitati. Provjeri vezu i pokušaj ponovno.');
       setLoadingCreator(false);
     });
 
-    // Listen to events and filter for this creator
-    const unsubEvents = onSnapshot(collection(db, 'events'), (snap) => {
-      const allEvents = snap.docs.map(d => ({ id: d.id, ...d.data() } as CalendarEvent));
-      const filtered = allEvents.filter(e => e.creatorId === creatorId);
-      
-      // Sort by date ascending (soonest first)
-      const now = new Date();
-      now.setHours(0, 0, 0, 0);
-      const upcoming = filtered.filter(e => new Date(e.date) >= now);
-      upcoming.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      
-      setEvents(upcoming);
-    });
+    // Only this creator's events (server-side filter instead of reading every event)
+    const unsubEvents = onSnapshot(
+      query(collection(db, 'events'), where('creatorId', '==', creatorId)),
+      (snap) => {
+        const cutoff = Date.now() - EVENT_GRACE_MS;
+        const upcoming = snap.docs
+          .map(d => ({ id: d.id, ...d.data() } as CalendarEvent))
+          .filter(e => {
+            const t = new Date(e.date).getTime();
+            return !Number.isNaN(t) && t >= cutoff;
+          })
+          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        setEvents(upcoming);
+      },
+      (err) => console.error('[CreatorPage] Events listener failed:', err),
+    );
 
-    // Listen to courses and filter for this creator
-    const unsubCourses = onSnapshot(collection(db, 'courses'), (snap) => {
-      const allCourses = snap.docs.map(d => ({ id: d.id, ...d.data() } as Lecture));
-      const filtered = allCourses.filter(l => l.creatorId === creatorId);
-      setLectures(filtered);
-    });
+    const unsubCourses = onSnapshot(
+      query(collection(db, 'courses'), where('creatorId', '==', creatorId)),
+      (snap) => setLectures(snap.docs.map(d => ({ id: d.id, ...d.data() } as Lecture))),
+      (err) => console.error('[CreatorPage] Courses listener failed:', err),
+    );
 
     return () => {
+      cancelled = true;
       unsubEvents();
       unsubCourses();
     };
@@ -99,8 +124,8 @@ export default function CreatorPage() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#0E1420] text-center">
         <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
-        <h2 className="text-2xl font-black text-white uppercase mb-2">Mentor nije pronađen</h2>
-        <p className="text-muted-foreground text-sm max-w-sm mb-6">Traženi profil ne postoji ili više nije označen kao mentor u sustavu.</p>
+        <h2 className="text-2xl font-black text-white uppercase mb-2">{loadError ? 'Greška pri učitavanju' : 'Mentor nije pronađen'}</h2>
+        <p className="text-muted-foreground text-sm max-w-sm mb-6">{loadError || 'Traženi profil ne postoji ili više nije dostupan.'}</p>
         <button onClick={() => navigate(-1)} className="px-6 py-3 bg-white/5 border border-white/10 rounded-full font-bold text-xs uppercase tracking-widest hover:bg-white/10 transition-colors text-white">
           POVRATAK
         </button>
@@ -108,18 +133,22 @@ export default function CreatorPage() {
     );
   }
 
-  const avatarSrc = creator.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${creator.username}`;
+  const avatarSrc = safeUrl(creator.avatar_url) || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(creator.username || creatorId || '')}`;
   const level = calculateLevel(creator.xp || 0);
+  const youtubeHref = creator.youtube
+    ? (safeUrl(creator.youtube)
+      || (/^(www\.|m\.)?youtube\.com\//i.test(creator.youtube.trim()) ? safeUrl(`https://${creator.youtube.trim()}`) : null)
+      || `https://youtube.com/@${handle(creator.youtube)}`)
+    : null;
 
-  const formatDate = (isoStr: string) => {
-    const d = new Date(isoStr);
-    return d.toLocaleDateString('hr-HR', {
+  const formatDate = (isoStr: string) =>
+    new Date(isoStr).toLocaleString('hr-HR', {
+      weekday: 'short',
       day: 'numeric',
       month: 'long',
       hour: '2-digit',
-      minute: '2-digit'
-    }) + 'h';
-  };
+      minute: '2-digit',
+    });
 
   return (
     <div className="p-4 md:p-10 max-w-5xl mx-auto pb-28">
@@ -183,7 +212,7 @@ export default function CreatorPage() {
               <div className="flex items-center justify-center md:justify-start gap-3 pt-2">
                 {creator.instagram && (
                   <a 
-                    href={`https://instagram.com/${creator.instagram.replace('@', '')}`} 
+                    href={`https://instagram.com/${handle(creator.instagram)}`}
                     target="_blank" 
                     rel="noopener noreferrer" 
                     className="w-10 h-10 rounded-full bg-white/5 border border-white/10 hover:border-[#3B82F6]/50 flex items-center justify-center hover:scale-110 transition-all text-white hover:text-[#3B82F6]"
@@ -193,7 +222,7 @@ export default function CreatorPage() {
                 )}
                 {creator.tiktok && (
                   <a 
-                    href={`https://tiktok.com/@${creator.tiktok.replace('@', '')}`} 
+                    href={`https://tiktok.com/@${handle(creator.tiktok)}`}
                     target="_blank" 
                     rel="noopener noreferrer" 
                     className="w-10 h-10 rounded-full bg-white/5 border border-white/10 hover:border-[#3B82F6]/50 flex items-center justify-center hover:scale-110 transition-all text-white hover:text-[#3B82F6]"
@@ -201,9 +230,9 @@ export default function CreatorPage() {
                     <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93v7.2c0 1.96-.5 3.9-1.5 5.56-1.14 1.83-3.1 3.12-5.26 3.4-2.18.29-4.52-.22-6.29-1.57-1.74-1.35-2.87-3.37-3.08-5.59-.2-2.22.42-4.51 1.82-6.25 1.34-1.63 3.33-2.67 5.43-2.84.4-.04.81-.04 1.21-.02v3.9c-.39-.02-.79-.04-1.18-.01-1.07.08-2.11.53-2.89 1.3-.77.78-1.22 1.83-1.26 2.92-.04 1.09.34 2.16 1.03 3.02.7.85 1.71 1.37 2.8 1.48 1.09.11 2.21-.21 3.09-.86.88-.65 1.42-1.61 1.56-2.69.14-1.07-.11-2.18-.7-3.09V.02h3.04z"/></svg>
                   </a>
                 )}
-                {creator.youtube && (
-                  <a 
-                    href={creator.youtube.startsWith('http') ? creator.youtube : `https://youtube.com/@${creator.youtube.replace('@', '')}`} 
+                {youtubeHref && (
+                  <a
+                    href={youtubeHref}
                     target="_blank" 
                     rel="noopener noreferrer" 
                     className="w-10 h-10 rounded-full bg-white/5 border border-white/10 hover:border-[#3B82F6]/50 flex items-center justify-center hover:scale-110 transition-all text-white hover:text-[#3B82F6]"
@@ -256,14 +285,16 @@ export default function CreatorPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {events.map((event) => (
-                <div 
+              {events.map((event) => {
+                const joinUrl = safeUrl(event.meetLink || event.zoomLink);
+                return (
+                <div
                   key={event.id}
                   className="ursa-card p-6 flex flex-col justify-between hover:border-[#3B82F6]/50 transition-colors group relative overflow-hidden"
                 >
                   {event.bgImage && (
                     <>
-                      <div className="absolute inset-0 bg-cover bg-center opacity-10 pointer-events-none" style={{ backgroundImage: `url(${event.bgImage})` }} />
+                      <div className="absolute inset-0 bg-cover bg-center opacity-10 pointer-events-none" style={{ backgroundImage: cssUrl(event.bgImage) }} />
                       <div className="absolute inset-0 bg-gradient-to-t from-[#151E30] to-transparent pointer-events-none" />
                     </>
                   )}
@@ -290,20 +321,39 @@ export default function CreatorPage() {
                     </p>
                   </div>
 
-                  <div className="flex items-center justify-between border-t border-white/5 pt-4 mt-auto relative z-10">
-                    <div className="flex flex-col text-left">
-                      <span className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">Datum i vrijeme</span>
-                      <span className="text-xs font-bold text-white mt-0.5">{formatDate(event.date)}</span>
+                  <div className="border-t border-white/5 pt-4 mt-auto relative z-10 flex flex-col gap-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex flex-col text-left">
+                        <span className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">Datum i vrijeme</span>
+                        <span className="text-xs font-bold text-white mt-0.5">{formatDate(event.date)}</span>
+                      </div>
+                      <Link
+                        to={`/calendar?eventId=${encodeURIComponent(event.id)}`}
+                        className="px-4 py-2 bg-white/5 border border-white/10 text-white group-hover:bg-[#3B82F6] group-hover:text-white hover:scale-105 rounded-xl font-heading font-bold text-[10px] uppercase tracking-wider transition-all shrink-0"
+                      >
+                        REZERVIRAJ
+                      </Link>
                     </div>
-                    <Link 
-                      to={`/calendar?eventId=${event.id}`}
-                      className="px-4 py-2 bg-white/5 border border-white/10 text-white group-hover:bg-[#3B82F6] group-hover:text-white hover:scale-105 rounded-xl font-heading font-bold text-[10px] uppercase tracking-wider transition-all"
-                    >
-                      REZERVIRAJ
-                    </Link>
+                    {joinUrl ? (
+                      <a
+                        href={joinUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full py-2.5 rounded-xl bg-emerald-500 text-[#0A0A0F] font-heading font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-emerald-400 transition-colors"
+                      >
+                        <Video className="w-4 h-4" />
+                        {MEET_RE.test(joinUrl) ? 'Pridruži se na Google Meet' : 'Pridruži se online'}
+                        <ExternalLink className="w-3.5 h-3.5 opacity-70" />
+                      </a>
+                    ) : (
+                      <div className="w-full py-2.5 rounded-xl border border-dashed border-white/15 text-[#8B8FA8] font-heading font-bold text-[11px] uppercase tracking-wider flex items-center justify-center gap-2">
+                        <Video className="w-4 h-4" /> Link uskoro
+                      </div>
+                    )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )
         )}

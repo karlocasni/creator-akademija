@@ -1,13 +1,16 @@
-import { useState, useEffect, useRef } from 'react';
-import { Trophy, Plus, Link2, Heart, Shield, X, Clock, Sparkles, Trash2, Award, ExternalLink, CheckCircle } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { Trophy, Plus, Link2, Heart, Shield, X, Clock, Sparkles, Trash2, Award, ExternalLink, CheckCircle, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import CommunityTabs from '../components/layout/CommunityTabs';
 import { db } from '../lib/firebase';
 import { sendBroadcastNotification } from '../lib/notifications';
 import {
-  collection, addDoc, setDoc, onSnapshot, updateDoc, doc, serverTimestamp, deleteDoc
+  collection, onSnapshot, updateDoc, doc, serverTimestamp, deleteDoc, addDoc, getDocs,
+  query, where, writeBatch, arrayUnion, arrayRemove, increment,
 } from 'firebase/firestore';
+import { toast, confirmDialog } from '../lib/dialog';
+import { safeUrl } from '../lib/media';
 
 interface Challenge {
   id: string;
@@ -45,21 +48,35 @@ function getDaysRemaining(deadline: string): number {
   return Math.max(0, diff);
 }
 
+// Firestore Timestamp | ISO string | pending serverTimestamp (null) → millis
+const toMillis = (v: any): number => {
+  if (!v) return Date.now();
+  if (typeof v.toMillis === 'function') return v.toMillis();
+  if (typeof v === 'string') return Date.parse(v) || 0;
+  return 0;
+};
+
+const errorCode = (err: unknown) => (err as { code?: string })?.code || '';
+
+const avatarFor = (sub: Submission) =>
+  safeUrl(sub.authorAvatar) || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(sub.authorId || sub.id)}`;
+
 export default function Challenge() {
   const { profile, updateLocalProfile, user } = useAuth();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const highlightedWinnerId = searchParams.get('winnerId');
 
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const [activeChallenge, setActiveChallenge] = useState<Challenge | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // UI state
   const [showSubmitForm, setShowSubmitForm] = useState(false);
   const [showAdminForm, setShowAdminForm] = useState(false);
-  const [xpAwarded, setXpAwarded] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [xpAwarded, setXpAwarded] = useState<number | null>(null);
+  const [pinBusy, setPinBusy] = useState(false);
+  const likeBusyRef = useRef<Set<string>>(new Set());
 
   // Submission form
   const [videoLink, setVideoLink] = useState('');
@@ -77,54 +94,41 @@ export default function Challenge() {
   const winnerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'challenges'), snap => {
-      if (snap.empty) {
-        const stored = localStorage.getItem('creator_mock_challenges');
-        if (stored) {
-          try {
-            const items = JSON.parse(stored) as Challenge[];
-            setChallenges(items);
-            const active = items.find(c => c.active) || null;
-            setActiveChallenge(active);
-            return;
-          } catch (_) {}
-        }
-        import('../lib/firebase-mock').then(({ SEED_CHALLENGES }) => {
-          const items = SEED_CHALLENGES as unknown as Challenge[];
-          setChallenges(items);
-          const active = items.find(c => c.active) || null;
-          setActiveChallenge(active);
-        });
-      } else {
-        const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as Challenge));
+    const unsub = onSnapshot(
+      collection(db, 'challenges'),
+      snap => {
+        const items = snap.docs
+          .map(d => ({ id: d.id, ...d.data() } as Challenge))
+          .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt));
         setChallenges(items);
-        const active = items.find(c => c.active) || null;
-        setActiveChallenge(active);
-      }
-    });
+        setLoadError(null);
+        setLoading(false);
+      },
+      err => {
+        console.error('[Challenges] Challenges listener failed:', err);
+        setLoadError(errorCode(err) === 'permission-denied'
+          ? 'Izazovi su dostupni samo aktivnim članovima.'
+          : 'Izazovi se nisu mogli učitati. Provjeri vezu i osvježi stranicu.');
+        setLoading(false);
+      },
+    );
     return unsub;
   }, []);
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'challengeSubmissions'), snap => {
-      if (snap.empty) {
-        const stored = localStorage.getItem('creator_mock_challenge_submissions');
-        if (stored) {
-          try {
-            setSubmissions(JSON.parse(stored));
-            return;
-          } catch (_) {}
-        }
-        import('../lib/firebase-mock').then(({ SEED_CHALLENGE_SUBMISSIONS }) => {
-          setSubmissions(SEED_CHALLENGE_SUBMISSIONS as Submission[]);
-        });
-      } else {
-        const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as Submission));
-        setSubmissions(items);
-      }
-    });
+    const unsub = onSnapshot(
+      collection(db, 'challengeSubmissions'),
+      snap => setSubmissions(snap.docs.map(d => ({ id: d.id, ...d.data() } as Submission))),
+      err => {
+        console.error('[Challenges] Submissions listener failed:', err);
+        toast('Prijave na izazove se nisu mogle učitati.', 'error');
+      },
+    );
     return unsub;
   }, []);
+
+  // The newest active challenge is "the" active one
+  const activeChallenge = useMemo(() => challenges.find(c => c.active) || null, [challenges]);
 
   useEffect(() => {
     if (highlightedWinnerId && winnerRef.current) {
@@ -132,191 +136,152 @@ export default function Challenge() {
     }
   }, [highlightedWinnerId, submissions]);
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4000);
-  };
-
   const handleSubmit = async () => {
-    if (!videoLink.trim() || !user || !activeChallenge || submitting) return;
+    if (!user || !activeChallenge || submitting) return;
+    const link = safeUrl(videoLink.trim());
+    if (!link) {
+      toast('Upiši ispravan link na video (mora počinjati s https://).', 'error');
+      return;
+    }
+    if (activeChallenge.deadline && new Date(activeChallenge.deadline).getTime() < Date.now()) {
+      toast('Rok za ovaj izazov je istekao.', 'info');
+      return;
+    }
     setSubmitting(true);
     try {
-      const newSub = {
+      // XP only for the first submission of this user to this challenge
+      const prior = await getDocs(query(
+        collection(db, 'challengeSubmissions'),
+        where('challengeId', '==', activeChallenge.id),
+        where('authorId', '==', user.uid),
+      ));
+      const firstSubmission = prior.empty;
+
+      await addDoc(collection(db, 'challengeSubmissions'), {
         challengeId: activeChallenge.id,
         authorId: user.uid,
         authorName: profile?.username || 'Korisnik',
         authorAvatar: profile?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`,
-        videoLink: videoLink.trim(),
+        videoLink: link,
         description: submitDesc.trim(),
         likes: [],
         likeCount: 0,
         isPinned: false,
         createdAt: serverTimestamp(),
-      };
-
-      const docRef = await addDoc(collection(db, 'challengeSubmissions'), newSub);
-      
-      const createdItem: Submission = {
-        id: docRef.id,
-        ...newSub,
-        createdAt: new Date().toISOString(),
-      };
-
-      setSubmissions(prev => {
-        const next = [createdItem, ...prev];
-        try { localStorage.setItem('creator_mock_challenge_submissions', JSON.stringify(next)); } catch (_) {}
-        return next;
       });
 
-      if (profile) {
-        updateLocalProfile({ xp: (profile.xp || 0) + (activeChallenge.xpReward || 50) });
+      const reward = activeChallenge.xpReward || 50;
+      if (firstSubmission && profile) {
+        updateLocalProfile({ xp: (profile.xp || 0) + Math.min(reward, 500) });
+        setXpAwarded(reward);
+        setTimeout(() => setXpAwarded(null), 4000);
+        toast(`Video prijava je poslana! +${reward} XP`, 'success');
+      } else {
+        toast('Video prijava je poslana! (XP se dodjeljuje samo za prvu prijavu na izazov.)', 'success');
       }
-      setXpAwarded(true);
-      setTimeout(() => setXpAwarded(false), 3000);
       setVideoLink('');
       setSubmitDesc('');
       setShowSubmitForm(false);
-      showToast('🎉 Video prijava uspješno poslana! Dobili ste XP!');
-    } catch (e) {
-      console.error('Submit failed:', e);
+    } catch (err) {
+      console.error('[Challenges] Submit failed:', err);
+      toast(errorCode(err) === 'permission-denied'
+        ? 'Nemaš dopuštenje za slanje prijave (link mora počinjati s https://).'
+        : 'Slanje prijave nije uspjelo. Pokušaj ponovno.', 'error');
     } finally {
       setSubmitting(false);
     }
   };
 
+  // Likes: only my own uid is added/removed and the counter moves by one (firestore.rules)
   const handleLike = async (sub: Submission) => {
-    if (!user) return;
-    const liked = sub.likes?.includes(user.uid);
-    const newLikes = liked
-      ? sub.likes.filter(id => id !== user.uid)
-      : [...(sub.likes || []), user.uid];
-    
-    setSubmissions(prev => {
-      const next = prev.map(s => s.id === sub.id ? { ...s, likes: newLikes, likeCount: newLikes.length } : s);
-      try { localStorage.setItem('creator_mock_challenge_submissions', JSON.stringify(next)); } catch (_) {}
-      return next;
-    });
-
-    await setDoc(doc(db, 'challengeSubmissions', sub.id), {
-      likes: newLikes,
-      likeCount: newLikes.length,
-    }, { merge: true }).catch(() => {});
-  };
-
-  // 1. OZNAČI KAO POBJEDNIKA + SEND BROADCAST NOTIFICATION TO EVERYONE
-  const handlePin = async (sub: Submission) => {
-    if (!profile?.isAdmin || !activeChallenge) return;
+    if (!user || likeBusyRef.current.has(sub.id)) return;
+    const liked = !!sub.likes?.includes(user.uid);
+    likeBusyRef.current.add(sub.id);
     try {
-      const willPin = !sub.isPinned;
-
-      // Update submissions locally & immediately
-      const updatedSubs = submissions.map(s => {
-        if (s.id === sub.id) {
-          return { ...s, isPinned: willPin };
-        }
-        if (willPin && s.challengeId === activeChallenge.id) {
-          return { ...s, isPinned: false };
-        }
-        return s;
+      await updateDoc(doc(db, 'challengeSubmissions', sub.id), {
+        likes: liked ? arrayRemove(user.uid) : arrayUnion(user.uid),
+        likeCount: increment(liked ? -1 : 1),
       });
-      setSubmissions(updatedSubs);
-      try { localStorage.setItem('creator_mock_challenge_submissions', JSON.stringify(updatedSubs)); } catch (_) {}
-
-      // Update active challenge locally & immediately
-      const updatedChallenges = challenges.map(ch => {
-        if (ch.id === activeChallenge.id) {
-          return {
-            ...ch,
-            pinnedSubmissionId: willPin ? sub.id : null,
-            winnerName: willPin ? sub.authorName : null,
-            winnerId: willPin ? sub.authorId : null,
-          };
-        }
-        return ch;
-      });
-      setChallenges(updatedChallenges);
-      const newActive = updatedChallenges.find(ch => ch.id === activeChallenge.id) || null;
-      setActiveChallenge(newActive);
-      try { localStorage.setItem('creator_mock_challenges', JSON.stringify(updatedChallenges)); } catch (_) {}
-
-      // Persist to Firestore with setDoc merge
-      for (const s of updatedSubs.filter(item => item.challengeId === activeChallenge.id)) {
-        await setDoc(doc(db, 'challengeSubmissions', s.id), {
-          ...s,
-          isPinned: s.id === sub.id ? willPin : false
-        }, { merge: true }).catch(() => {});
-      }
-
-      await setDoc(doc(db, 'challenges', activeChallenge.id), {
-        pinnedSubmissionId: willPin ? sub.id : null,
-        winnerName: willPin ? sub.authorName : null,
-        winnerId: willPin ? sub.authorId : null,
-      }, { merge: true }).catch(() => {});
-
-      if (willPin) {
-        // Send broadcast notification to all users with link to the winning submission
-        await sendBroadcastNotification({
-          senderId: user?.uid || 'admin',
-          senderName: profile?.username || 'Mentor Ismael',
-          senderAvatar: profile?.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Mentor',
-          type: 'challenge_winner',
-          message: `🏆 ${sub.authorName} je proglašen/a pobjednikom izazova "${activeChallenge.title}"! Pogledaj pobjednički video rad.`,
-          link: `/challenge?winnerId=${sub.id}`,
-        });
-
-        showToast(`🏆 ${sub.authorName} je označen/a kao pobjednik! Obavijest je poslana svim polaznicima.`);
-      } else {
-        showToast('Oznaka pobjednika je uklonjena.');
-      }
-    } catch (e) {
-      console.error('Handle pin failed:', e);
+    } catch (err) {
+      console.error('[Challenges] Like failed:', err);
+      toast('Lajk nije spremljen. Pokušaj ponovno.', 'error');
+    } finally {
+      likeBusyRef.current.delete(sub.id);
     }
   };
 
-  // 2. KREIRAJ NOVI CHALLENGE
+  // 1. OZNAČI KAO POBJEDNIKA + BROADCAST NOTIFICATION
+  const handlePin = async (sub: Submission) => {
+    if (!profile?.isAdmin || !activeChallenge || pinBusy) return;
+    const willPin = !sub.isPinned;
+    setPinBusy(true);
+    try {
+      // Only the isPinned flag is written on submissions
+      const batch = writeBatch(db);
+      if (willPin) {
+        submissions
+          .filter(s => s.challengeId === activeChallenge.id && s.isPinned && s.id !== sub.id)
+          .forEach(s => batch.update(doc(db, 'challengeSubmissions', s.id), { isPinned: false }));
+      }
+      batch.update(doc(db, 'challengeSubmissions', sub.id), { isPinned: willPin });
+      batch.update(doc(db, 'challenges', activeChallenge.id), {
+        pinnedSubmissionId: willPin ? sub.id : null,
+        winnerName: willPin ? sub.authorName : null,
+        winnerId: willPin ? sub.authorId : null,
+      });
+      await batch.commit();
+    } catch (err) {
+      console.error('[Challenges] Pin failed:', err);
+      toast('Označavanje pobjednika nije uspjelo. Pokušaj ponovno.', 'error');
+      return;
+    } finally {
+      setPinBusy(false);
+    }
+
+    if (willPin) {
+      await sendBroadcastNotification({
+        senderId: user?.uid || 'admin',
+        senderName: profile?.username || 'Mentor Ismael',
+        senderAvatar: profile?.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Mentor',
+        type: 'challenge_winner',
+        message: `🏆 ${sub.authorName} je proglašen/a pobjednikom izazova "${activeChallenge.title}"! Pogledaj pobjednički video rad.`,
+        link: `/challenge?winnerId=${sub.id}`,
+      });
+      toast(`🏆 ${sub.authorName} je označen/a kao pobjednik! Obavijest je poslana polaznicima.`, 'success');
+    } else {
+      toast('Oznaka pobjednika je uklonjena.', 'info');
+    }
+  };
+
+  // 2. KREIRAJ NOVI CHALLENGE (deactivates the previous ones in the same batch)
   const handleCreateChallenge = async () => {
-    if (!adminTitle.trim() || adminCreating) return;
+    if (!profile?.isAdmin || adminCreating) return;
+    const title = adminTitle.trim();
+    const description = adminDesc.trim();
+    if (!title || !description) {
+      toast('Upiši naslov i opis izazova.', 'error');
+      return;
+    }
     setAdminCreating(true);
     try {
       const deadlineDate = new Date();
       deadlineDate.setDate(deadlineDate.getDate() + adminDays);
       deadlineDate.setHours(23, 59, 59, 0);
 
-      const newChallengeData = {
-        title: adminTitle.trim(),
-        description: adminDesc.trim(),
+      const batch = writeBatch(db);
+      challenges
+        .filter(c => c.active)
+        .forEach(c => batch.update(doc(db, 'challenges', c.id), { active: false }));
+      batch.set(doc(collection(db, 'challenges')), {
+        title,
+        description,
         exampleText: adminExample.trim(),
         xpReward: adminXp,
         deadline: deadlineDate.toISOString(),
         active: true,
         createdAt: serverTimestamp(),
-      };
-
-      const docRef = await addDoc(collection(db, 'challenges'), newChallengeData);
-
-      const createdChallenge: Challenge = {
-        id: docRef.id,
-        ...newChallengeData,
-        createdAt: new Date().toISOString(),
-      };
-
-      // Set as the only active challenge
-      const updatedChallenges = challenges.map(ch => ({ ...ch, active: false }));
-      updatedChallenges.unshift(createdChallenge);
-
-      setChallenges(updatedChallenges);
-      setActiveChallenge(createdChallenge);
-      try { localStorage.setItem('creator_mock_challenges', JSON.stringify(updatedChallenges)); } catch (_) {}
-
-      // Send notification about new active challenge
-      await sendBroadcastNotification({
-        senderId: user?.uid || 'admin',
-        senderName: profile?.username || 'Mentor Ismael',
-        senderAvatar: profile?.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Mentor',
-        type: 'new_challenge',
-        message: `⚡ Novi Izazov Tjedna je aktivan: "${adminTitle.trim()}" (+${adminXp} XP)! Sudjeluj i osvoji nagrade.`,
-        link: '/challenge',
       });
+      await batch.commit();
 
       setAdminTitle('');
       setAdminDesc('');
@@ -324,15 +289,25 @@ export default function Challenge() {
       setAdminXp(50);
       setAdminDays(7);
       setShowAdminForm(false);
-      showToast('⚡ Novi izazov je uspješno kreiran i postavljen kao aktivan!');
-    } catch (e) {
-      console.error('Create challenge failed:', e);
+      toast('⚡ Novi izazov je kreiran i postavljen kao aktivan!', 'success');
+
+      await sendBroadcastNotification({
+        senderId: user?.uid || 'admin',
+        senderName: profile?.username || 'Mentor Ismael',
+        senderAvatar: profile?.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Mentor',
+        type: 'new_challenge',
+        message: `⚡ Novi Izazov Tjedna je aktivan: "${title}" (+${adminXp} XP)! Sudjeluj i osvoji nagrade.`,
+        link: '/challenge',
+      });
+    } catch (err) {
+      console.error('[Challenges] Create challenge failed:', err);
+      toast('Kreiranje izazova nije uspjelo. Pokušaj ponovno.', 'error');
     } finally {
       setAdminCreating(false);
     }
   };
 
-  // 3. AKTIVIRAJ PONOVO: OVERRIDES THE CURRENT ACTIVE CHALLENGE AND SWAPS PLACES
+  // 3. AKTIVIRAJ PONOVO: becomes the only active challenge for another 7 days
   const handleReactivateChallenge = async (c: Challenge) => {
     if (!profile?.isAdmin) return;
     try {
@@ -340,40 +315,18 @@ export default function Challenge() {
       newDeadline.setDate(newDeadline.getDate() + 7);
       newDeadline.setHours(23, 59, 59, 0);
 
-      // 1. Swap in local state immediately so UI updates in real-time
-      const updatedChallenges = challenges.map(ch => {
-        if (ch.id === c.id) {
-          return {
-            ...ch,
-            active: true,
-            deadline: newDeadline.toISOString(),
-            pinnedSubmissionId: null,
-            daysRemaining: 7,
-          };
-        }
-        return {
-          ...ch,
-          active: false,
-        };
+      const batch = writeBatch(db);
+      challenges
+        .filter(ch => ch.active && ch.id !== c.id)
+        .forEach(ch => batch.update(doc(db, 'challenges', ch.id), { active: false }));
+      batch.update(doc(db, 'challenges', c.id), {
+        active: true,
+        deadline: newDeadline.toISOString(),
+        updatedAt: serverTimestamp(),
       });
+      await batch.commit();
+      toast(`⚡ Izazov "${c.title}" je sada aktivni izazov tjedna (7 dana do kraja)!`, 'success');
 
-      setChallenges(updatedChallenges);
-      const newActive = updatedChallenges.find(ch => ch.id === c.id) || null;
-      setActiveChallenge(newActive);
-      try { localStorage.setItem('creator_mock_challenges', JSON.stringify(updatedChallenges)); } catch (_) {}
-
-      // 2. Persist to Firestore with setDoc merge
-      for (const ch of updatedChallenges) {
-        await setDoc(doc(db, 'challenges', ch.id), {
-          ...ch,
-          active: ch.id === c.id,
-          deadline: ch.id === c.id ? newDeadline.toISOString() : (ch.deadline || new Date().toISOString()),
-          pinnedSubmissionId: ch.id === c.id ? null : (ch.pinnedSubmissionId || null),
-          updatedAt: serverTimestamp(),
-        }, { merge: true }).catch((err: any) => console.warn('setDoc challenge error:', err));
-      }
-
-      // 3. Send notification to everyone
       await sendBroadcastNotification({
         senderId: user?.uid || 'admin',
         senderName: profile?.username || 'Mentor Ismael',
@@ -382,31 +335,44 @@ export default function Challenge() {
         message: `⚡ Izazov je ponovno aktivan: "${c.title}" (+${c.xpReward || 50} XP)! Prijavi svoj video rad (7 dana do kraja).`,
         link: '/challenge',
       });
-
-      showToast(`⚡ Izazov "${c.title}" je sada AKTIVNI izazov tjedna (7 dana do kraja)!`);
-    } catch (e) {
-      console.error('Reactivate challenge failed:', e);
+    } catch (err) {
+      console.error('[Challenges] Reactivate failed:', err);
+      toast('Aktivacija izazova nije uspjela. Pokušaj ponovno.', 'error');
     }
   };
 
   const handleDeactivateChallenge = async (c: Challenge) => {
     if (!profile?.isAdmin) return;
+    const ok = await confirmDialog(`Završiti izazov "${c.title}"? Prebacit će se u prošle izazove.`, { confirmLabel: 'Završi' });
+    if (!ok) return;
     try {
       await updateDoc(doc(db, 'challenges', c.id), { active: false });
-      showToast('Izazov je završen i prebačen u prošle izazove.');
-    } catch (e) {
-      console.error('Deactivate failed:', e);
+      toast('Izazov je završen i prebačen u prošle izazove.', 'info');
+    } catch (err) {
+      console.error('[Challenges] Deactivate failed:', err);
+      toast('Završavanje izazova nije uspjelo.', 'error');
     }
   };
 
-  const handleDeleteChallenge = async (id: string) => {
+  const handleDeleteChallenge = async (c: Challenge) => {
     if (!profile?.isAdmin) return;
-    if (!confirm('Želite li trajno obrisati ovaj izazov?')) return;
+    const ok = await confirmDialog(
+      `Trajno obrisati izazov "${c.title}" i sve njegove prijave? Ovo se ne može poništiti.`,
+      { confirmLabel: 'Obriši', danger: true },
+    );
+    if (!ok) return;
     try {
-      await deleteDoc(doc(db, 'challenges', id));
-      showToast('Izazov je obrisan.');
-    } catch (e) {
-      console.error('Delete failed:', e);
+      const subs = submissions.filter(s => s.challengeId === c.id);
+      for (let i = 0; i < subs.length; i += 400) {
+        const batch = writeBatch(db);
+        subs.slice(i, i + 400).forEach(s => batch.delete(doc(db, 'challengeSubmissions', s.id)));
+        await batch.commit();
+      }
+      await deleteDoc(doc(db, 'challenges', c.id));
+      toast('Izazov je obrisan.', 'success');
+    } catch (err) {
+      console.error('[Challenges] Delete failed:', err);
+      toast('Brisanje izazova nije uspjelo.', 'error');
     }
   };
 
@@ -427,7 +393,11 @@ export default function Challenge() {
     });
 
   const winnerSub = activeSubs.find(s => s.isPinned);
-  const previousChallenges = challenges.filter(c => !c.active);
+  const winnerLink = winnerSub ? safeUrl(winnerSub.videoLink) : null;
+  const previousChallenges = challenges.filter(c => c.id !== activeChallenge?.id);
+  const videoLinkValid = !videoLink.trim() || !!safeUrl(videoLink.trim());
+  const alreadySubmitted = !!user && !!activeChallenge &&
+    submissions.some(s => s.challengeId === activeChallenge.id && s.authorId === user.uid);
 
   return (
     <div className="flex flex-col w-full max-w-full overflow-hidden pb-[80px]">
@@ -464,22 +434,29 @@ export default function Challenge() {
 
       <div className="px-[16px] flex flex-col gap-5">
 
-        {/* TOAST BANNER */}
-        {toastMessage && (
-          <div className="text-center py-2.5 px-4 bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 rounded-2xl font-bold text-[12px] uppercase tracking-wider animate-pulse shadow-lg">
-            {toastMessage}
+        {/* LOAD ERROR */}
+        {loadError && (
+          <div className="bg-red-500/10 border border-red-500/20 rounded-[20px] p-4 flex items-start gap-3 text-red-200 text-[13px] text-left">
+            <AlertCircle className="w-5 h-5 shrink-0 text-red-400" />
+            <span>{loadError}</span>
           </div>
         )}
 
         {/* XP TOAST */}
-        {xpAwarded && (
+        {xpAwarded !== null && (
           <div className="text-center py-2 bg-primary/15 border border-primary/30 text-primary rounded-full font-mono font-bold text-[11px] uppercase tracking-widest animate-pulse">
-            🎉 +50 XP dodano na vaš profil! Odlična video prijava!
+            🎉 +{xpAwarded} XP dodano na vaš profil! Odlična video prijava!
+          </div>
+        )}
+
+        {loading && (
+          <div className="flex justify-center py-8">
+            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
         )}
 
         {/* ADMIN CREATE CHALLENGE FORM */}
-        {profile?.isAdmin && (showAdminForm || !activeChallenge) && (
+        {!loading && !loadError && profile?.isAdmin && (showAdminForm || !activeChallenge) && (
           <div className="bg-[#151E30] rounded-[24px] border border-primary/30 p-6 shadow-xl space-y-4 text-left">
             <div className="flex items-center justify-between border-b border-white/5 pb-3">
               <span className="flex items-center gap-2 text-primary font-heading font-black text-sm uppercase tracking-wider">
@@ -605,7 +582,7 @@ export default function Challenge() {
         )}
 
         {/* ACTIVE CHALLENGE HERO */}
-        {activeChallenge ? (
+        {loading || loadError ? null : activeChallenge ? (
           <div
             className="rounded-[24px] p-[24px] relative overflow-hidden text-left"
             style={{
@@ -668,15 +645,17 @@ export default function Challenge() {
                     <p className="font-heading font-black text-sm text-white">{winnerSub.authorName}</p>
                   </div>
                 </div>
-                <a
-                  href={winnerSub.videoLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-400 text-black font-black text-[11px] uppercase rounded-full hover:scale-105 transition-transform shrink-0"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  Pogledaj Video
-                </a>
+                {winnerLink && (
+                  <a
+                    href={winnerLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-400 text-black font-black text-[11px] uppercase rounded-full hover:scale-105 transition-transform shrink-0"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    Pogledaj Video
+                  </a>
+                )}
               </div>
             )}
 
@@ -733,9 +712,15 @@ export default function Challenge() {
                   value={videoLink}
                   onChange={e => setVideoLink(e.target.value)}
                   placeholder="https://tiktok.com/@korisnik/video/..."
-                  className="w-full bg-[#0E1420] border border-[rgba(255,255,255,0.08)] rounded-[14px] py-3 pl-11 pr-4 text-[14px] text-white placeholder:text-[#4A4A5A] focus:border-[#3B82F6] focus:outline-none transition-colors"
+                  inputMode="url"
+                  className={`w-full bg-[#0E1420] border rounded-[14px] py-3 pl-11 pr-4 text-[14px] text-white placeholder:text-[#4A4A5A] focus:border-[#3B82F6] focus:outline-none transition-colors ${
+                    videoLinkValid ? 'border-[rgba(255,255,255,0.08)]' : 'border-red-500/60'
+                  }`}
                 />
               </div>
+              {!videoLinkValid && (
+                <p className="mt-1.5 text-[11px] text-red-400">Link mora počinjati s https:// (npr. https://www.tiktok.com/…).</p>
+              )}
             </div>
 
             <div>
@@ -753,10 +738,14 @@ export default function Challenge() {
 
             <button
               onClick={handleSubmit}
-              disabled={!videoLink.trim() || submitting}
+              disabled={!videoLink.trim() || !videoLinkValid || submitting}
               className="w-full py-3.5 bg-[#3B82F6] text-white font-heading font-[800] text-[14px] rounded-full uppercase hover:scale-[1.02] active:scale-[0.98] transition-transform disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-500/20 cursor-pointer"
             >
-              {submitting ? 'ŠALJEM PRIJAVU...' : `SUBMITTAJ RAD (+${activeChallenge.xpReward || 50} XP)`}
+              {submitting
+                ? 'ŠALJEM PRIJAVU...'
+                : alreadySubmitted
+                  ? 'POŠALJI JOŠ JEDAN RAD'
+                  : `SUBMITTAJ RAD (+${activeChallenge.xpReward || 50} XP)`}
             </button>
           </div>
         )}
@@ -803,7 +792,7 @@ export default function Challenge() {
 
                       <div className="flex items-center gap-3">
                         <img
-                          src={sub.authorAvatar}
+                          src={avatarFor(sub)}
                           alt={sub.authorName}
                           className={`w-10 h-10 rounded-full border object-cover ${
                             sub.isPinned ? 'border-amber-400 ring-2 ring-amber-400/40' : 'border-white/10'
@@ -820,15 +809,22 @@ export default function Challenge() {
                         </div>
                       </div>
 
-                      <a
-                        href={sub.videoLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-[13px] text-[#3B82F6] font-bold hover:underline truncate bg-white/5 px-3 py-2 rounded-xl"
-                      >
-                        <Link2 className="w-4 h-4 shrink-0 text-primary" />
-                        <span className="truncate">{sub.videoLink}</span>
-                      </a>
+                      {safeUrl(sub.videoLink) ? (
+                        <a
+                          href={safeUrl(sub.videoLink)!}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-[13px] text-[#3B82F6] font-bold hover:underline truncate bg-white/5 px-3 py-2 rounded-xl"
+                        >
+                          <Link2 className="w-4 h-4 shrink-0 text-primary" />
+                          <span className="truncate">{sub.videoLink}</span>
+                        </a>
+                      ) : (
+                        <span className="flex items-center gap-2 text-[13px] text-[#8B8FA8] bg-white/5 px-3 py-2 rounded-xl">
+                          <Link2 className="w-4 h-4 shrink-0" />
+                          Neispravan link
+                        </span>
+                      )}
 
                       <div className="flex items-center gap-2 pt-2 border-t border-[rgba(255,255,255,0.04)]">
                         <button
@@ -840,13 +836,14 @@ export default function Challenge() {
                           }`}
                         >
                           <Heart className={`w-3.5 h-3.5 ${user && sub.likes?.includes(user.uid) ? 'fill-current' : ''}`} />
-                          {sub.likeCount || 0}
+                          {Math.max(0, sub.likeCount || 0)}
                         </button>
 
                         {profile?.isAdmin && (
                           <button
                             onClick={() => handlePin(sub)}
-                            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[11px] font-heading font-black uppercase tracking-wider transition-all ml-auto cursor-pointer shadow-md ${
+                            disabled={pinBusy}
+                            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[11px] font-heading font-black uppercase tracking-wider transition-all ml-auto cursor-pointer shadow-md disabled:opacity-50 ${
                               sub.isPinned
                                 ? 'bg-amber-400 text-black hover:bg-amber-300'
                                 : 'bg-primary/20 border border-primary/40 text-primary hover:bg-primary hover:text-white'
@@ -897,7 +894,7 @@ export default function Challenge() {
                         ⚡ Aktiviraj ponovo
                       </button>
                       <button
-                        onClick={() => handleDeleteChallenge(c.id)}
+                        onClick={() => handleDeleteChallenge(c)}
                         className="p-2 rounded-xl text-red-400 bg-red-500/10 hover:bg-red-500/20 transition-colors cursor-pointer"
                         title="Obriši trajno"
                       >

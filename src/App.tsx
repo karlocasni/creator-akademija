@@ -6,6 +6,7 @@ import { useAuth } from './contexts/AuthContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import { UploadProvider } from './contexts/UploadContext';
 import UploadToast from './components/ui/UploadToast';
+import { DialogHost } from './lib/dialog';
 
 const AppShell = lazy(() => import('./components/layout/AppShell'));
 const Feed = lazy(() => import('./pages/Feed'));
@@ -26,7 +27,7 @@ const Submissions = lazy(() => import('./pages/Submissions'));
 const Paywall = lazy(() => import('./pages/Paywall'));
 
 function AppRoutes() {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, isActualAdmin } = useAuth();
   const location = useLocation();
   const [state, setState] = useState({
     path: location.pathname,
@@ -69,8 +70,8 @@ function AppRoutes() {
     );
   }
 
-  // Enforce paywall for inactive user profiles
-  if (profile && profile.status === 'inactive' && !profile.isAdmin) {
+  // Until an admin activates the account only the paywall is shown
+  if (profile && profile.status !== 'active' && !isActualAdmin) {
     return (
       <Suspense fallback={
         <div className="min-h-screen flex items-center justify-center bg-background">
@@ -159,6 +160,7 @@ function App() {
     <UploadProvider>
       <AppRoutes />
       <UploadToast />
+      <DialogHost />
     </UploadProvider>
   );
 }

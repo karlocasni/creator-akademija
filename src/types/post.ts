@@ -56,6 +56,11 @@ export interface UserProfile {
   isCreator?: boolean;
   accessUntil?: string | null;
   mainTopic?: string;
+  // Once-per-day / once-per-event XP guards (set by the tools and the calendar)
+  lastIdeaXpDate?: string;
+  lastHookXpDate?: string;
+  rsvpXpEventIds?: string[];
+  age?: number | null;
 }
 
 export interface FirestorePost {
@@ -94,4 +99,6 @@ export interface FirestoreComment {
   authorAvatar: string;
   content: string;
   createdAt: Timestamp;
+  likedBy?: string[];
+  likes?: number;
 }

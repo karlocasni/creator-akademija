@@ -13,48 +13,110 @@ service cloud.firestore {
       return isAuthed() && request.auth.uid == uid;
     }
 
-    // Check admin flag from the caller's own profile document or email (server-side check)
+    function myProfilePath() {
+      return /databases/$(database)/documents/profiles/$(request.auth.uid);
+    }
+
+    function myProfile() {
+      return get(myProfilePath()).data;
+    }
+
+    // Keep the emails in sync with src/lib/admin.ts and storage.rules
     function isAdmin() {
       return isAuthed() && (
         request.auth.token.email == 'brunovujcec6@gmail.com' ||
         request.auth.token.email == 'ismael.hadzic17@gmail.com' ||
-        (exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.isAdmin == true)
+        (exists(myProfilePath()) && myProfile().get('isAdmin', false) == true)
       );
     }
 
     function isCreator() {
-      return isAuthed() && (
-        exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.isCreator == true
-      );
+      return isAuthed() && exists(myProfilePath()) && myProfile().get('isCreator', false) == true;
+    }
+
+    function isStaff() {
+      return isAdmin() || isCreator();
+    }
+
+    // A paying member: profile activated by an admin
+    function isMember() {
+      return isAdmin() || (isAuthed() && exists(myProfilePath()) && myProfile().get('status', 'inactive') == 'active');
+    }
+
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    function onlyChanges(keys) {
+      return changedKeys().hasOnly(keys);
+    }
+
+    // The set of uids added to / removed from a list field is exactly the caller
+    function togglesOwnUid(field) {
+      let before = resource.data.get(field, []).toSet();
+      let after = request.resource.data.get(field, []).toSet();
+      return after.difference(before).union(before.difference(after)) == [request.auth.uid].toSet();
+    }
+
+    // A like counter moves by exactly the change of its uid list (legacy docs
+    // that stored the uids in the counter field get the list size).
+    function counterFollowsList(listField, countField) {
+      let before = resource.data.get(listField, []).toSet();
+      let after = request.resource.data.get(listField, []).toSet();
+      let old = resource.data.get(countField, 0);
+      let next = request.resource.data.get(countField, 0);
+      return (old is number && next == old + after.size() - before.size()) ||
+        (!(old is number) && next == after.size());
+    }
+
+    function isStorageUrlOrNull(v) {
+      return v == null || (v is string && v.matches('^https://firebasestorage[.]googleapis[.]com/.*'));
     }
 
     // ─── profiles ──────────────────────────────────────────────────────────────
+    // status / roles / access dates are admin-only; XP can only grow a little per write.
+
+    function profileLockedKeys() {
+      return ['status', 'isAdmin', 'isCreator', 'accessUntil', 'offsetDays', 'createdAt', 'email', 'uid'];
+    }
+
+    function levelOk() {
+      return !changedKeys().hasAny(['level']) || (
+        request.resource.data.level is int &&
+        request.resource.data.level >= 1 && request.resource.data.level <= 10
+      );
+    }
+
+    function xpChangeOk() {
+      return !changedKeys().hasAny(['xp']) || (
+        request.resource.data.xp is number &&
+        request.resource.data.xp >= resource.data.get('xp', 0) &&
+        request.resource.data.xp <= resource.data.get('xp', 0) + 500
+      );
+    }
 
     match /profiles/{userId} {
-      // Anyone authenticated can read any profile (leaderboard, members page, etc.)
-      allow read: if isAuthed();
+      allow read: if isOwner(userId) || isMember();
 
-      // A user can create/update their own profile.
-      // They cannot self-grant isAdmin unless their email explicitly permits it.
-      allow create: if (isOwner(userId) &&
-        (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false) &&
-        (!('isCreator' in request.resource.data) || request.resource.data.isCreator == false) &&
-        (!('accessUntil' in request.resource.data))
-      ) || 
-      request.auth.token.email == 'brunovujcec6@gmail.com' || 
-      request.auth.token.email == 'ismael.hadzic17@gmail.com' || 
-      isAdmin() || isCreator();
+      allow create: if isAdmin() || (
+        isOwner(userId) &&
+        request.resource.data.get('status', 'inactive') == 'inactive' &&
+        request.resource.data.get('isAdmin', false) == false &&
+        request.resource.data.get('isCreator', false) == false &&
+        !('accessUntil' in request.resource.data) &&
+        !('offsetDays' in request.resource.data) &&
+        request.resource.data.get('xp', 0) == 0
+      );
 
-      allow update: if (isOwner(userId) &&
-        (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == resource.data.isAdmin) &&
-        (!('isCreator' in request.resource.data) || request.resource.data.isCreator == resource.data.isCreator) &&
-        (!('accessUntil' in request.resource.data) || request.resource.data.accessUntil == resource.data.accessUntil)
-      ) || 
-      request.auth.token.email == 'brunovujcec6@gmail.com' || 
-      request.auth.token.email == 'ismael.hadzic17@gmail.com' || 
-      isAdmin() || isCreator();
+      allow update: if isAdmin() || (
+        isOwner(userId) &&
+        !changedKeys().hasAny(profileLockedKeys()) &&
+        xpChangeOk() && levelOk()
+      ) || (
+        // mentors grading a submission award the student +100 XP
+        isStaff() && onlyChanges(['xp', 'level']) &&
+        request.resource.data.xp == resource.data.get('xp', 0) + 100 && levelOk()
+      );
 
       allow delete: if isAdmin();
     }
@@ -62,144 +124,227 @@ service cloud.firestore {
     // ─── posts ─────────────────────────────────────────────────────────────────
 
     match /posts/{postId} {
-      allow read: if isAuthed();
+      allow read: if isMember();
 
-      // Any authenticated user can create a post
-      allow create: if isAuthed() &&
-        request.resource.data.authorId == request.auth.uid;
+      allow create: if isMember() &&
+        request.resource.data.authorId == request.auth.uid &&
+        request.resource.data.keys().hasOnly(['authorId', 'authorName', 'authorAvatar', 'content', 'title', 'category', 'imageUrl', 'videoUrl', 'commentsCount', 'createdAt']) &&
+        request.resource.data.content is string && request.resource.data.content.size() <= 5000 &&
+        request.resource.data.get('title', '') is string && request.resource.data.get('title', '').size() <= 200 &&
+        request.resource.data.commentsCount == 0 &&
+        request.resource.data.createdAt == request.time &&
+        isStorageUrlOrNull(request.resource.data.get('imageUrl', null)) &&
+        isStorageUrlOrNull(request.resource.data.get('videoUrl', null));
 
-      // Author or admin can update (e.g. pin, commentsCount increment)
-      allow update: if isAuthed() &&
-        (resource.data.authorId == request.auth.uid || isAdmin());
+      allow update: if isAdmin() ||
+        // author edits their own text/media
+        (isMember() && resource.data.authorId == request.auth.uid &&
+          onlyChanges(['content', 'title', 'category', 'imageUrl', 'videoUrl', 'updatedAt']) &&
+          isStorageUrlOrNull(request.resource.data.get('imageUrl', null)) &&
+          isStorageUrlOrNull(request.resource.data.get('videoUrl', null))) ||
+        // anyone commenting moves the counter by exactly one
+        (isMember() && onlyChanges(['commentsCount']) &&
+          (request.resource.data.commentsCount == resource.data.get('commentsCount', 0) + 1 ||
+           request.resource.data.commentsCount == resource.data.get('commentsCount', 0) - 1));
 
-      // Only post author or admin can delete
-      allow delete: if isAuthed() &&
-        (resource.data.authorId == request.auth.uid || isAdmin());
-
-      // ─── posts/{postId}/likes ──────────────────────────────────────────────
+      allow delete: if isAdmin() || (isAuthed() && resource.data.authorId == request.auth.uid);
 
       match /likes/{userId} {
-        // Any authenticated user can read likes (for like count / active state)
-        allow read: if isAuthed();
-        // A user can only write/delete their own like document
-        allow write: if isOwner(userId);
+        allow read: if isMember();
+        allow create: if isMember() && isOwner(userId);
+        allow delete: if isOwner(userId) || isAdmin();
       }
 
-      // ─── posts/{postId}/comments ──────────────────────────────────────────
-
       match /comments/{commentId} {
-        allow read: if isAuthed();
+        allow read: if isMember();
 
-        // Any authenticated user can create a comment
-        allow create: if isAuthed() &&
-          request.resource.data.authorId == request.auth.uid;
+        allow create: if isMember() &&
+          request.resource.data.authorId == request.auth.uid &&
+          request.resource.data.get('content', '') is string &&
+          request.resource.data.get('content', '').size() <= 2000 &&
+          request.resource.data.get('likedBy', []).size() == 0 &&
+          request.resource.data.get('likes', 0) == 0;
 
-        // Comment author or admin can update/delete
-        allow update, delete: if isAuthed() &&
-          (resource.data.authorId == request.auth.uid || isAdmin() || isCreator());
+        allow update: if isAdmin() ||
+          (isAuthed() && resource.data.authorId == request.auth.uid && onlyChanges(['content', 'updatedAt'])) ||
+          (isMember() && onlyChanges(['likedBy', 'likes']) && togglesOwnUid('likedBy') &&
+            counterFollowsList('likedBy', 'likes'));
+
+        allow delete: if isStaff() ||
+          (isAuthed() && resource.data.authorId == request.auth.uid);
       }
     }
 
     // ─── events ────────────────────────────────────────────────────────────────
 
     match /events/{eventId} {
-      allow read: if isAuthed();
-
-      // Admins and creators can create, update, or delete events
-      allow create, update, delete: if isAdmin() || isCreator();
-
-      // ─── events/{eventId}/rsvps ───────────────────────────────────────────
+      allow read: if isMember();
+      allow create: if isAdmin() || (isCreator() && request.resource.data.creatorId == request.auth.uid);
+      allow update: if isAdmin() ||
+        (isCreator() && resource.data.get('creatorId', '') == request.auth.uid && !changedKeys().hasAny(['creatorId']));
+      allow delete: if isAdmin() || (isCreator() && resource.data.get('creatorId', '') == request.auth.uid);
 
       match /rsvps/{userId} {
-        allow read: if isAuthed();
-        // Users can create/delete their own RSVP
-        allow write: if isOwner(userId);
+        allow read: if isMember();
+        allow create, update: if isMember() && isOwner(userId);
+        allow delete: if isOwner(userId) || isStaff();
       }
     }
 
     // ─── chats ─────────────────────────────────────────────────────────────────
 
-    match /chats/{chatId} {
-      allow read, write: if isAuthed() &&
-        request.auth.uid in resource.data.participants;
+    function isChatParticipant(chatId) {
+      return isAuthed() &&
+        request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+    }
 
-      allow create: if isAuthed() &&
-        request.auth.uid in request.resource.data.participants;
+    match /chats/{chatId} {
+      // resource == null lets the client check whether a DM already exists
+      allow read: if isAuthed() && (resource == null || request.auth.uid in resource.data.participants);
+
+      allow create: if isMember() &&
+        request.resource.data.participants is list &&
+        request.resource.data.participants.size() == 2 &&
+        request.auth.uid in request.resource.data.participants &&
+        (chatId == request.resource.data.participants[0] + '_' + request.resource.data.participants[1] ||
+         chatId == request.resource.data.participants[1] + '_' + request.resource.data.participants[0]);
+
+      allow update: if isAuthed() &&
+        request.auth.uid in resource.data.participants &&
+        onlyChanges(['lastMessage', 'lastMessageTime', 'lastMessageSenderId']) &&
+        request.resource.data.lastMessageSenderId == request.auth.uid;
+
+      allow delete: if isAdmin();
 
       match /messages/{messageId} {
-        allow read: if isAuthed() &&
-          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
-        allow create: if isAuthed() &&
-          request.resource.data.senderId == request.auth.uid;
-        allow update: if isAuthed() &&
-          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        allow read: if isChatParticipant(chatId);
+        allow create: if isMember() &&
+          request.resource.data.senderId == request.auth.uid &&
+          request.resource.data.get('text', '') is string &&
+          request.resource.data.get('text', '').size() <= 4000 &&
+          isChatParticipant(chatId);
+        allow update: if isChatParticipant(chatId) && onlyChanges(['read']);
       }
     }
 
     // ─── notifications ─────────────────────────────────────────────────────────
 
     match /notifications/{notifId} {
-      // Only the recipient can read their own notifications
-      allow read: if isAuthed() && resource.data.recipientId == request.auth.uid;
-      // Notifications are created server-side or by other authenticated users
-      allow create: if isAuthed();
-      // Only recipient can mark as read
-      allow update: if isAuthed() && resource.data.recipientId == request.auth.uid;
-      allow delete: if isAuthed() && resource.data.recipientId == request.auth.uid;
+      allow read, delete: if isAuthed() && resource.data.recipientId == request.auth.uid;
+      allow update: if isAuthed() && resource.data.recipientId == request.auth.uid && onlyChanges(['read']);
+      allow create: if isMember() &&
+        request.resource.data.senderId == request.auth.uid &&
+        request.resource.data.recipientId is string &&
+        request.resource.data.recipientId != 'all' &&
+        request.resource.data.get('message', '') is string &&
+        request.resource.data.get('message', '').size() <= 500;
     }
 
     // ─── challenges ────────────────────────────────────────────────────────────
 
     match /challenges/{challengeId} {
-      allow read: if isAuthed();
+      allow read: if isMember();
       allow write: if isAdmin();
     }
 
-    // ─── challengeSubmissions ──────────────────────────────────────────────────
-
     match /challengeSubmissions/{submissionId} {
-      allow read: if isAuthed();
-      // Allow any user to create a submission
-      allow create: if isAuthed() && request.resource.data.authorId == request.auth.uid;
-      // Allow users to update likes, or admins to pin
-      allow update: if isAuthed();
-      // Only admin or author can delete
-      allow delete: if isAuthed() && (resource.data.authorId == request.auth.uid || isAdmin());
+      allow read: if isMember();
+      allow create: if isMember() &&
+        request.resource.data.authorId == request.auth.uid &&
+        request.resource.data.get('isPinned', false) == false &&
+        request.resource.data.get('likes', []).size() == 0 &&
+        request.resource.data.get('likeCount', 0) == 0 &&
+        request.resource.data.get('videoLink', '') is string &&
+        request.resource.data.get('videoLink', '').matches('^https?://.*');
+      allow update: if isAdmin() ||
+        (isAuthed() && resource.data.authorId == request.auth.uid && onlyChanges(['description', 'videoLink']) &&
+          request.resource.data.get('videoLink', '').matches('^https?://.*')) ||
+        (isMember() && onlyChanges(['likes', 'likeCount']) && togglesOwnUid('likes') &&
+          request.resource.data.get('likeCount', 0) == resource.data.get('likeCount', 0) +
+            request.resource.data.get('likes', []).size() - resource.data.get('likes', []).size());
+      allow delete: if isAdmin() || (isAuthed() && resource.data.authorId == request.auth.uid);
+    }
+
+    // ─── submissions (Predaja i ocjena videa) ──────────────────────────────────
+    // Students see their own; everyone sees graded + public ones; staff grade.
+
+    function submissionEditableKeys() {
+      return ['description', 'isPublic', 'videoLink', 'lectureId', 'lectureTitle', 'updatedAt'];
+    }
+
+    match /submissions/{submissionId} {
+      allow read: if isStaff() ||
+        (isAuthed() && resource.data.userId == request.auth.uid) ||
+        (isMember() && resource.data.status == 'graded' && resource.data.isPublic == true);
+
+      allow create: if isMember() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.keys().hasOnly(['userId', 'username', 'userAvatar', 'lectureId', 'lectureTitle', 'videoLink', 'videoPath', 'description', 'isPublic', 'status', 'createdAt']) &&
+        request.resource.data.videoLink is string &&
+        request.resource.data.videoLink.matches('^https://.*') &&
+        request.resource.data.get('description', '').size() <= 2000;
+
+      allow update: if isStaff() ||
+        (isAuthed() && resource.data.userId == request.auth.uid && (
+          // before grading the student may edit everything they submitted
+          (resource.data.status == 'pending' && onlyChanges(submissionEditableKeys()) &&
+            request.resource.data.videoLink.matches('^https://.*')) ||
+          // afterwards only the public/private switch
+          onlyChanges(['isPublic'])
+        ));
+
+      allow delete: if isStaff() || (isAuthed() && resource.data.userId == request.auth.uid);
     }
 
     // ─── courses ───────────────────────────────────────────────────────────────
 
     match /courses/{courseId} {
-      allow read: if isAuthed();
-      allow write: if isAdmin() || isCreator();
+      allow read: if isMember();
+      allow write: if isStaff();
+    }
+
+    // ─── discordWaitlist ───────────────────────────────────────────────────────
+    // Landing-page waitlist form: visitors (logged out too) may add themselves,
+    // only admins can read or clean up the list.
+
+    match /discordWaitlist/{entryId} {
+      allow create: if request.resource.data.keys().hasOnly(['discordName', 'fullName', 'email', 'createdAt']) &&
+        request.resource.data.email is string &&
+        request.resource.data.email.matches('^[^@ ]+@[^@ ]+[.][^@ ]+$') &&
+        request.resource.data.email.size() <= 200 &&
+        request.resource.data.fullName is string && request.resource.data.fullName.size() <= 120 &&
+        request.resource.data.discordName is string && request.resource.data.discordName.size() <= 80 &&
+        request.resource.data.createdAt == request.time;
+      allow read, update, delete: if isAdmin();
     }
 
     // ─── hookVault ─────────────────────────────────────────────────────────────
 
     match /hookVault/{hookId} {
-      allow read: if isAuthed();
-      allow create: if isAuthed() &&
-        request.resource.data.authorId == request.auth.uid;
-      allow update, delete: if isAuthed() &&
-        (resource.data.authorId == request.auth.uid || isAdmin());
+      allow read: if isMember();
+      allow create: if isMember() &&
+        request.resource.data.authorId == request.auth.uid &&
+        request.resource.data.get('likedBy', []).size() == 0 &&
+        request.resource.data.get('likes', 0) == 0;
+      allow update: if isAdmin() ||
+        (isAuthed() && resource.data.authorId == request.auth.uid &&
+          !changedKeys().hasAny(['authorId', 'likes', 'likedBy', 'createdAt'])) ||
+        (isMember() && onlyChanges(['likes', 'likedBy']) && togglesOwnUid('likedBy') &&
+          counterFollowsList('likedBy', 'likes'));
+      allow delete: if isAdmin() || (isAuthed() && resource.data.authorId == request.auth.uid);
     }
 
-    // ─── videoIdeas ────────────────────────────────────────────────────────────
+    // ─── videoIdeas / savedTrends (private per user) ───────────────────────────
 
     match /videoIdeas/{ideaId} {
-      allow read: if isAuthed() && resource.data.userId == request.auth.uid;
-      allow create: if isAuthed() &&
-        request.resource.data.userId == request.auth.uid;
-      allow delete: if isAuthed() && resource.data.userId == request.auth.uid;
+      allow read, delete: if isAuthed() && resource.data.userId == request.auth.uid;
+      allow create: if isMember() && request.resource.data.userId == request.auth.uid;
     }
 
-    // ─── savedTrends ───────────────────────────────────────────────────────────
-
     match /savedTrends/{trendId} {
-      allow read: if isAuthed() && resource.data.userId == request.auth.uid;
-      allow create: if isAuthed() &&
-        request.resource.data.userId == request.auth.uid;
-      allow delete: if isAuthed() && resource.data.userId == request.auth.uid;
+      allow read, delete: if isAuthed() && resource.data.userId == request.auth.uid;
+      allow create: if isMember() && request.resource.data.userId == request.auth.uid;
     }
   }
 }

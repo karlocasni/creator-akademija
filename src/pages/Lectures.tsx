@@ -1,11 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
-import { Play, Lock, Clock, CheckCircle2, ChevronRight, Bell, Plus, X, Upload, Globe, Star } from 'lucide-react';
-import { collection, getDocs, addDoc, onSnapshot, query, updateDoc, doc, deleteDoc, orderBy, serverTimestamp, setDoc, getDoc } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../lib/firebase';
+import { Play, Lock, Clock, CheckCircle2, ChevronRight, Bell, Plus, X, Upload, Globe, Star, RefreshCw } from 'lucide-react';
+import { collection, getDocs, addDoc, onSnapshot, query, updateDoc, doc, deleteDoc, where, serverTimestamp, writeBatch, increment, Timestamp } from 'firebase/firestore';
+import type { UploadTask } from 'firebase/storage';
+import { db } from '../lib/firebase';
+import { prepareImage, uploadMedia, mediaPath, readVideoInfo, formatDuration, uploadErrorMessage, safeUrl, isVideoFile } from '../lib/media';
+import { toast, confirmDialog } from '../lib/dialog';
 import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../lib/utils';
 import { createNotification } from '../lib/notifications';
+import { COURSE_LESSONS } from '../data/courseLessons';
 
 interface Lecture {
   id: string;
@@ -15,7 +18,8 @@ interface Lecture {
   thumbnail: string;
   duration: string;
   category: string;
-  youtubeId?: string;
+  youtubeId?: string | null;
+  videoUrl?: string | null;
 }
 
 
@@ -24,6 +28,7 @@ export default function Lectures() {
   const [selectedLecture, setSelectedLecture] = useState<Lecture | null>(null);
   const [notifying, setNotifying] = useState(false);
   const [lectures, setLectures] = useState<Lecture[]>([]);
+  const [lecturesError, setLecturesError] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('SVE');
   const [showAddModal, setShowAddModal] = useState(false);
   const [newCourse, setNewCourse] = useState<Partial<Lecture>>({});
@@ -31,6 +36,10 @@ export default function Lectures() {
   const [addingCourse, setAddingCourse] = useState(false);
   const [editCourseId, setEditCourseId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const [videoUploadProgress, setVideoUploadProgress] = useState<number | null>(null);
+  const videoTaskRef = useRef<UploadTask | null>(null);
+  const isStaff = profile?.isAdmin === true || profile?.isCreator === true;
 
   // Submissions states
   const [submissions, setSubmissions] = useState<any[]>([]);
@@ -50,36 +59,35 @@ export default function Lectures() {
   const [grading, setGrading] = useState(false);
 
   useEffect(() => {
-    const q = query(collection(db, 'courses'), orderBy('daysToUnlock', 'asc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (snapshot.empty) {
-        import('../lib/firebase-mock').then(({ SEED_COURSES }) => {
-          setLectures(SEED_COURSES as any[]);
-        });
-      } else {
-        const dbLectures = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lecture));
-        setLectures(dbLectures);
-      }
+    const unsubscribe = onSnapshot(collection(db, 'courses'), (snapshot) => {
+      const dbLectures = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Lecture));
+      dbLectures.sort((a, b) =>
+        (Number(a.daysToUnlock) || 0) - (Number(b.daysToUnlock) || 0) ||
+        a.id.localeCompare(b.id, undefined, { numeric: true }));
+      setLectures(dbLectures);
+      setLecturesError(false);
     }, (err) => {
-      console.warn('[Lectures] Courses fetch error, using mock fallback:', err);
-      import('../lib/firebase-mock').then(({ SEED_COURSES }) => {
-        setLectures(SEED_COURSES as any[]);
-      });
+      console.warn('[Lectures] Courses fetch error:', err);
+      setLecturesError(true);
     });
     return unsubscribe;
   }, []);
 
   useEffect(() => {
-    const unsubscribeSubmissions = onSnapshot(collection(db, 'submissions'), (snapshot) => {
+    if (!user) return;
+    const source = isStaff
+      ? collection(db, 'submissions')
+      : query(collection(db, 'submissions'), where('userId', '==', user.uid));
+    const unsubscribeSubmissions = onSnapshot(source, (snapshot) => {
       const allSubmissions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
       allSubmissions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       setSubmissions(allSubmissions);
     }, (err) => {
-      console.warn('[Lectures] Submissions fetch error, using empty fallback:', err);
+      console.warn('[Lectures] Submissions fetch error:', err);
       setSubmissions([]);
     });
     return unsubscribeSubmissions;
-  }, []);
+  }, [user, isStaff]);
 
   const notifyAll = async () => {
     if (!user || notifying) return;
@@ -91,7 +99,7 @@ export default function Lectures() {
         profile?.avatar_url ||
         `https://api.dicebear.com/7.x/avataaars/svg?seed=${senderName}`;
       await Promise.all(
-        snap.docs.map((d) =>
+        snap.docs.filter(d => d.id !== user.uid).map((d) =>
           createNotification({
             recipientId: d.id,
             senderId: user.uid,
@@ -103,8 +111,10 @@ export default function Lectures() {
           }).catch((err) => console.warn('Notify failed for', d.id, err)),
         ),
       );
+      toast('Obavijest je poslana svim članovima.', 'success');
     } catch (err) {
       console.error('notifyAll failed:', err);
+      toast('Slanje obavijesti nije uspjelo.', 'error');
     } finally {
       setNotifying(false);
     }
@@ -113,25 +123,87 @@ export default function Lectures() {
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = '';
     setUploading(true);
     try {
-      const storageRef = ref(storage, `thumbnails/${Date.now()}_${file.name}`);
-      const task = uploadBytesResumable(storageRef, file);
-      task.on('state_changed', null, 
-        (err) => { console.error(err); setUploading(false); },
-        async () => {
-          const url = await getDownloadURL(task.snapshot.ref);
-          setNewCourse(prev => ({ ...prev, thumbnail: url }));
-          setUploading(false);
-        }
-      );
+      const blob = await prepareImage(file, 1280);
+      const url = await uploadMedia(mediaPath('thumbnails', blob.type), blob).promise;
+      setNewCourse(prev => ({ ...prev, thumbnail: url }));
     } catch (err) {
-      console.error(err);
+      console.error('Thumbnail upload failed:', err);
+      toast(uploadErrorMessage(err), 'error');
+    } finally {
       setUploading(false);
     }
   };
 
-  const extractYoutubeId = (urlOrId?: string) => {
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (e.target) e.target.value = '';
+    if (!file) return;
+    if (!isVideoFile(file)) {
+      toast('Odaberi video datoteku (MP4).', 'error');
+      return;
+    }
+    // Lesson videos are uploaded as-is (they are encoded for the web beforehand)
+    setVideoUploadProgress(0);
+    try {
+      readVideoInfo(file)
+        .then(({ duration }) => setNewCourse(prev => ({ ...prev, duration: formatDuration(duration) })))
+        .catch(() => { /* duration stays editable by hand */ });
+      const upload = uploadMedia(mediaPath('courses/videos', file.type || 'video/mp4'), file,
+        p => setVideoUploadProgress(Math.round(p * 100)));
+      videoTaskRef.current = upload.task;
+      const url = await upload.promise;
+      setNewCourse(prev => ({ ...prev, videoUrl: url, youtubeId: '' }));
+      toast('Video je prenesen. Spremi lekciju.', 'success');
+    } catch (err) {
+      console.error('Lesson video upload failed:', err);
+      toast(uploadErrorMessage(err), 'error');
+    } finally {
+      videoTaskRef.current = null;
+      setVideoUploadProgress(null);
+    }
+  };
+
+  const closeCourseModal = () => {
+    videoTaskRef.current?.cancel();
+    setShowAddModal(false);
+    setEditCourseId(null);
+  };
+
+  // Writes the curriculum from src/data/courseLessons.ts into courses/course-1…9.
+  // Merges only the text/poster fields, so uploaded videos (videoUrl) are kept.
+  const [syncingCurriculum, setSyncingCurriculum] = useState(false);
+  const syncCurriculum = async () => {
+    if (!profile?.isAdmin) return;
+    const ok = await confirmDialog(`Ažurirati naslove, opise, trajanje i naslovnice za ${COURSE_LESSONS.length} lekcija (course-1 … course-${COURSE_LESSONS.length})? Preneseni videi ostaju netaknuti.`, { confirmLabel: 'Ažuriraj' });
+    if (!ok) return;
+    setSyncingCurriculum(true);
+    try {
+      const batch = writeBatch(db);
+      for (const lesson of COURSE_LESSONS) {
+        batch.set(doc(db, 'courses', lesson.id), {
+          title: `${lesson.title}: ${lesson.subtitle}`,
+          description: lesson.description,
+          duration: lesson.comingSoon ? 'Uskoro' : lesson.duration,
+          category: lesson.category,
+          daysToUnlock: lesson.daysToUnlock,
+          thumbnail: `/media/lessons/${lesson.id.replace('course-', 'lekcija-')}.jpg`,
+          youtubeId: null,
+        }, { merge: true });
+      }
+      await batch.commit();
+      toast('Sadržaj tečaja je ažuriran.', 'success');
+    } catch (err) {
+      console.error('Curriculum sync failed:', err);
+      toast('Ažuriranje sadržaja nije uspjelo.', 'error');
+    } finally {
+      setSyncingCurriculum(false);
+    }
+  };
+
+  const extractYoutubeId = (urlOrId?: string | null) => {
     if (!urlOrId) return null;
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
     const match = urlOrId.match(regExp);
@@ -140,25 +212,31 @@ export default function Lectures() {
 
   const handleDeleteCourse = async (courseId: string) => {
     if (!profile?.isAdmin) return;
-    if (!window.confirm('Jesi li siguran da želiš obrisati ovu lekciju?')) return;
-    
+    const ok = await confirmDialog('Obrisati ovu lekciju? Ovo se ne može poništiti.', { confirmLabel: 'Obriši', danger: true });
+    if (!ok) return;
+
     try {
       await deleteDoc(doc(db, 'courses', courseId));
+      toast('Lekcija je obrisana.', 'success');
     } catch (err) {
       console.error('Failed to delete course:', err);
-      alert('Greška pri brisanju');
+      toast('Brisanje nije uspjelo.', 'error');
     }
   };
 
   const handleAddCourse = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCourse.thumbnail && !editCourseId) {
-      alert('Molimo prenesite sliku!');
+      toast('Prenesi naslovnu sliku lekcije.', 'error');
+      return;
+    }
+    if (videoUploadProgress !== null) {
+      toast('Pričekaj da se video prenese.', 'info');
       return;
     }
     setAddingCourse(true);
     try {
-      const courseData = {
+      const courseData: Record<string, unknown> = {
         title: newCourse.title || '',
         description: newCourse.description || '',
         daysToUnlock: Number(newCourse.daysToUnlock) || 0,
@@ -166,8 +244,10 @@ export default function Lectures() {
         duration: newCourse.duration || '10:00',
         category: newCourse.category || 'Trening',
         youtubeId: extractYoutubeId(newCourse.youtubeId) || null,
-        createdAt: editCourseId ? undefined : serverTimestamp(),
+        videoUrl: newCourse.videoUrl || null,
       };
+      // Firestore rejects undefined values, so only stamp createdAt on new lessons
+      if (!editCourseId) courseData.createdAt = serverTimestamp();
 
       if (editCourseId) {
         await updateDoc(doc(db, 'courses', editCourseId), courseData);
@@ -178,9 +258,10 @@ export default function Lectures() {
       setShowAddModal(false);
       setNewCourse({});
       setEditCourseId(null);
+      toast('Lekcija je spremljena.', 'success');
     } catch (err) {
       console.error('Failed to save course:', err);
-      alert('Greška pri spremanju');
+      toast('Spremanje lekcije nije uspjelo.', 'error');
     } finally {
       setAddingCourse(false);
     }
@@ -188,32 +269,28 @@ export default function Lectures() {
 
   const handleGradeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profile || !selectedSubmissionForGrading) return;
+    if (!profile || !selectedSubmissionForGrading || grading) return;
 
     setGrading(true);
+    const firstGrade = selectedSubmissionForGrading.status !== 'graded';
 
     try {
-      const subRef = doc(db, 'submissions', selectedSubmissionForGrading.id);
-      await setDoc(subRef, {
+      await updateDoc(doc(db, 'submissions', selectedSubmissionForGrading.id), {
         status: 'graded',
         grade: gradeValue,
         feedback: feedbackText.trim(),
         gradedBy: profile.username,
         gradedAt: new Date().toISOString()
-      }, { merge: true });
+      });
 
-      // Award XP to the student (+100 XP for video completion!)
-      const studentRef = doc(db, 'profiles', selectedSubmissionForGrading.userId);
-      const studentSnap = await getDoc(studentRef);
-      if (studentSnap.exists()) {
-        const studentData = studentSnap.data();
-        await setDoc(studentRef, {
-          xp: (studentData.xp || 0) + 100
-        }, { merge: true });
+      // +100 XP only the first time a submission is graded
+      if (firstGrade) {
+        updateDoc(doc(db, 'profiles', selectedSubmissionForGrading.userId), { xp: increment(100) })
+          .catch(err => console.warn('XP update error:', err));
       }
 
       // Send notification to student
-      await createNotification({
+      createNotification({
         recipientId: selectedSubmissionForGrading.userId,
         senderId: user?.uid || 'system',
         senderName: profile.username,
@@ -221,22 +298,24 @@ export default function Lectures() {
         type: 'comment',
         message: `Mentor ${profile.username} je ocijenio tvoj video za predavanje: ${selectedSubmissionForGrading.lectureTitle} (Ocjena: ${gradeValue}/5)`,
         postId: null
-      });
+      }).catch(err => console.warn('Notification error:', err));
 
+      toast('Ocjena je spremljena.', 'success');
       setSelectedSubmissionForGrading(null);
       setFeedbackText('');
       setGradeValue(5);
     } catch (err) {
       console.error('Grading failed:', err);
-      alert('Došlo je do pogreške pri ocjenjivanju.');
+      toast('Ocjena se nije spremila. Pokušaj ponovno.', 'error');
     } finally {
       setGrading(false);
     }
   };
 
   const getSignupDate = (): Date => {
-    if (!profile?.createdAt) return new Date();
-    const parsed = new Date(profile.createdAt);
+    const raw = profile?.createdAt as unknown;
+    if (!raw) return new Date();
+    const parsed = raw instanceof Timestamp ? raw.toDate() : new Date(raw as string);
     return isNaN(parsed.getTime()) ? new Date() : parsed;
   };
 
@@ -281,7 +360,19 @@ export default function Lectures() {
           <ChevronRight className="w-4 h-4 rotate-180" /> NATRAG
         </button>
         <div className="aspect-video bg-black rounded-3xl overflow-hidden mb-8 relative">
-          {selectedLecture.youtubeId ? (
+          {selectedLecture.videoUrl ? (
+            <video
+              key={selectedLecture.id}
+              src={selectedLecture.videoUrl}
+              poster={selectedLecture.thumbnail}
+              controls
+              playsInline
+              preload="metadata"
+              controlsList="nodownload"
+              onContextMenu={(e) => e.preventDefault()}
+              className="w-full h-full bg-black"
+            />
+          ) : selectedLecture.youtubeId ? (
             <iframe 
               src={`https://www.youtube.com/embed/${selectedLecture.youtubeId.includes('http') ? (selectedLecture.youtubeId.match(/(?:youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]{11})/) || [])[1] || selectedLecture.youtubeId : selectedLecture.youtubeId}?rel=0&modestbranding=1&playsinline=1&origin=${window.location.origin}`}
               className="w-full h-full border-0"
@@ -297,10 +388,12 @@ export default function Lectures() {
                 className="w-full h-full object-cover opacity-50"
                 alt=""
               />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-20 h-20 bg-primary rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform cursor-pointer">
-                  <Play className="w-8 h-8 text-black fill-current" />
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-center px-6">
+                <div className="w-16 h-16 bg-white/10 border border-white/15 backdrop-blur-md rounded-full flex items-center justify-center">
+                  <Clock className="w-7 h-7 text-white" />
                 </div>
+                <span className="text-sm md:text-base font-black uppercase tracking-widest text-white">Video uskoro</span>
+                <span className="text-xs text-white/60">Ova lekcija se upravo priprema.</span>
               </div>
             </>
           )}
@@ -386,7 +479,7 @@ export default function Lectures() {
                     <div className="space-y-2">
                       <h4 className="text-xs font-bold text-[#8B8FA8] uppercase tracking-wider">Tvoj predani video:</h4>
                       <a
-                        href={mySub.videoLink}
+                        href={safeUrl(mySub.videoLink) || undefined}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-2 text-primary font-bold hover:underline group break-all text-sm"
@@ -443,8 +536,12 @@ export default function Lectures() {
                   <form 
                     onSubmit={async (e) => {
                       e.preventDefault();
-                      if (!user || !profile) return;
-                      if (!videoLink.trim()) return;
+                      if (!user || !profile || submitting) return;
+                      const link = safeUrl(videoLink);
+                      if (!link || !link.startsWith('https://')) {
+                        toast('Unesi ispravan https:// link na video.', 'error');
+                        return;
+                      }
 
                       setSubmitting(true);
                       setSubmitSuccess(false);
@@ -452,13 +549,12 @@ export default function Lectures() {
                       try {
                         if (isEditingSubmission && mySub) {
                           // Update existing submission
-                          const subRef = doc(db, 'submissions', mySub.id);
-                          await setDoc(subRef, {
-                            videoLink: videoLink.trim(),
-                            description: submissionNotes.trim(),
+                          await updateDoc(doc(db, 'submissions', mySub.id), {
+                            videoLink: link,
+                            description: submissionNotes.trim().slice(0, 2000),
                             isPublic: Boolean(isPublic),
-                            createdAt: new Date().toISOString()
-                          }, { merge: true });
+                            updatedAt: new Date().toISOString()
+                          });
 
                           setIsEditingSubmission(false);
                         } else {
@@ -466,11 +562,11 @@ export default function Lectures() {
                           const submissionData = {
                             userId: user.uid,
                             username: profile.username,
-                            userAvatar: profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`,
+                            userAvatar: profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(profile.username || user.uid)}`,
                             lectureId: selectedLecture.id,
                             lectureTitle: selectedLecture.title,
-                            videoLink: videoLink.trim(),
-                            description: submissionNotes.trim(),
+                            videoLink: link,
+                            description: submissionNotes.trim().slice(0, 2000),
                             isPublic: Boolean(isPublic),
                             status: 'pending' as const,
                             createdAt: new Date().toISOString()
@@ -490,7 +586,7 @@ export default function Lectures() {
                         setTimeout(() => setSubmitSuccess(false), 4000);
                       } catch (err) {
                         console.error('Submission failed:', err);
-                        alert('Došlo je do pogreške pri predaji videa.');
+                        toast('Predaja nije uspjela. Pokušaj ponovno.', 'error');
                       } finally {
                         setSubmitting(false);
                       }
@@ -534,6 +630,7 @@ export default function Lectures() {
                         type="checkbox"
                         checked={isPublic}
                         onChange={e => setIsPublic(e.target.checked)}
+                        onClick={e => e.stopPropagation()}
                         className="w-4 h-4 mt-0.5 rounded accent-emerald-500 cursor-pointer"
                       />
                       <div className="space-y-0.5 flex-1">
@@ -633,7 +730,7 @@ export default function Lectures() {
                                 <p className="text-xs text-[#8B8FA8] italic">"{sub.description}"</p>
                               )}
                               <a
-                                href={sub.videoLink}
+                                href={safeUrl(sub.videoLink) || undefined}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-bold"
@@ -690,7 +787,7 @@ export default function Lectures() {
                                 <p className="text-xs text-[#8B8FA8]"><span className="font-bold text-white">Povratne informacije:</span> {sub.feedback}</p>
                               )}
                               <a
-                                href={sub.videoLink}
+                                href={safeUrl(sub.videoLink) || undefined}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-bold"
@@ -845,6 +942,14 @@ export default function Lectures() {
               <Bell className="w-[14px] h-[14px]" />
               {notifying ? 'Slanje...' : 'Obavijesti članove'}
             </button>
+            <button
+              onClick={syncCurriculum}
+              disabled={syncingCurriculum}
+              className="flex items-center gap-[8px] px-[16px] py-[8px] bg-[rgba(255,255,255,0.05)] text-[#FFFFFF] rounded-full font-heading font-[700] text-[12px] hover:bg-[rgba(255,255,255,0.1)] transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={cn('w-[14px] h-[14px]', syncingCurriculum && 'animate-spin')} />
+              {syncingCurriculum ? 'Ažuriranje...' : 'Sinkroniziraj sadržaj'}
+            </button>
           </div>
         )}
       </div>
@@ -868,6 +973,18 @@ export default function Lectures() {
       </div>
 
       {/* 4. FEATURED COURSE */}
+      {lecturesError && (
+        <div role="alert" className="mb-6 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          Lekcije se nisu mogle učitati. Provjeri vezu i osvježi stranicu.
+        </div>
+      )}
+
+      {!lecturesError && lectures.length === 0 && (
+        <div className="mb-6 rounded-3xl border border-white/10 bg-white/[0.03] px-6 py-10 text-center text-sm text-muted-foreground">
+          Lekcije se učitavaju…
+        </div>
+      )}
+
       {featuredCourse && (
         <div 
           className="mx-[16px] mb-[12px] rounded-[20px] overflow-hidden relative group cursor-pointer"
@@ -1012,10 +1129,10 @@ export default function Lectures() {
 
       {showAddModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-          <div className="absolute inset-0 bg-background/80 backdrop-blur-xl" onClick={() => {setShowAddModal(false); setEditCourseId(null);}} />
+          <div className="absolute inset-0 bg-background/80 backdrop-blur-xl" onClick={closeCourseModal} />
           <div className="relative w-full max-w-md glass p-8 rounded-[2.5rem] border-primary/20 animate-in fade-in zoom-in duration-300 max-h-[90vh] overflow-y-auto">
             <button 
-              onClick={() => {setShowAddModal(false); setEditCourseId(null);}}
+              onClick={closeCourseModal}
               className="absolute top-6 right-6 p-2 hover:bg-white/5 rounded-full text-muted-foreground transition-colors"
             >
               <X className="w-5 h-5" />
@@ -1043,7 +1160,7 @@ export default function Lectures() {
                 <input
                   type="number"
                   placeholder="Dani za otklj."
-                  value={newCourse.daysToUnlock || ''}
+                  value={newCourse.daysToUnlock ?? ''}
                   onChange={e => setNewCourse({...newCourse, daysToUnlock: Number(e.target.value)})}
                   className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-primary text-white"
                   required
@@ -1065,6 +1182,47 @@ export default function Lectures() {
                 className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:border-primary text-white"
                 required
               />
+              <div
+                className="border-2 border-dashed border-white/20 rounded-xl p-4 text-center cursor-pointer hover:bg-white/5 transition-colors"
+                onClick={() => videoUploadProgress === null && videoInputRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const file = e.dataTransfer.files?.[0];
+                  if (file && file.type.startsWith('video/') && videoUploadProgress === null) {
+                    handleVideoUpload({ target: { files: [file] } } as any);
+                  }
+                }}
+              >
+                {videoUploadProgress !== null ? (
+                  <div className="space-y-2">
+                    <span className="text-sm font-bold text-primary">Prijenos videa... {videoUploadProgress}%</span>
+                    <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                      <div className="h-full bg-primary transition-all" style={{ width: `${videoUploadProgress}%` }} />
+                    </div>
+                  </div>
+                ) : newCourse.videoUrl ? (
+                  <div className="flex flex-col items-center gap-1">
+                    <CheckCircle2 className="w-6 h-6 text-primary" />
+                    <span className="text-sm font-bold text-white uppercase">Video prenesen</span>
+                    <span className="text-[10px] text-muted-foreground">Klikni za zamjenu videa</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-2">
+                    <Upload className="w-6 h-6 text-muted-foreground" />
+                    <span className="text-sm font-bold text-muted-foreground uppercase">Dodaj Video (MP4)</span>
+                    <span className="text-[10px] text-muted-foreground">Klikni ili povuci video ovdje</span>
+                  </div>
+                )}
+                <input
+                  type="file"
+                  ref={videoInputRef}
+                  className="hidden"
+                  accept="video/mp4,video/*"
+                  onChange={handleVideoUpload}
+                />
+              </div>
               <input
                 type="text"
                 placeholder="YouTube ID (opcionalno)"
@@ -1107,7 +1265,7 @@ export default function Lectures() {
               </div>
               <button 
                 type="submit"
-                disabled={addingCourse || uploading}
+                disabled={addingCourse || uploading || videoUploadProgress !== null}
                 className="w-full py-4 bg-primary text-black rounded-xl font-black text-lg hover:scale-[1.02] transition-transform disabled:opacity-50"
               >
                 {addingCourse ? 'SPREMANJE...' : (editCourseId ? 'SPREMI PROMJENE' : 'DODAJ')}

@@ -1,11 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Flame, Music, Search, ArrowLeft, Bookmark, BookmarkCheck } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { bottomNavEventTarget } from '../components/layout/BottomNav';
 import { db } from '../lib/firebase';
-import { collection, addDoc, deleteDoc, doc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, deleteDoc, doc, onSnapshot, serverTimestamp, query, where } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
+import { toast } from '../lib/dialog';
+
+interface SavedTrend {
+  id: string;
+  trendId: number;
+  userId: string;
+}
 
 
 const TRENDS = [
@@ -20,7 +27,9 @@ export default function TrendTracker() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [filter, setFilter] = useState<'all' | 'audio' | 'format' | 'hashtag'>('all');
-  const [savedTrends, setSavedTrends] = useState<any[]>([]);
+  const [savedTrends, setSavedTrends] = useState<SavedTrend[]>([]);
+  const busyRef = useRef<Set<number>>(new Set());
+  const [busyIds, setBusyIds] = useState<number[]>([]);
 
   const filteredTrends = TRENDS.filter(t => filter === 'all' || t.type === filter);
 
@@ -33,36 +42,55 @@ export default function TrendTracker() {
   }, []);
 
   // Load saved trends for current user
+  // savedTrends is private: the rules only allow reading my own docs, so the query must filter by userId
   useEffect(() => {
-    if (!user) return;
-    const unsub = onSnapshot(collection(db, 'savedTrends'), snap => {
-      const userSaved = snap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .filter((item: any) => item.userId === user.uid);
-      setSavedTrends(userSaved);
-    });
+    if (!user) {
+      setSavedTrends([]);
+      return;
+    }
+    const unsub = onSnapshot(
+      query(collection(db, 'savedTrends'), where('userId', '==', user.uid)),
+      snap => setSavedTrends(snap.docs.map(d => ({ id: d.id, ...d.data() } as SavedTrend))),
+      err => {
+        console.error('[TrendTracker] Saved trends listener failed:', err);
+        toast('Spremljeni trendovi se nisu mogli učitati.', 'error');
+      },
+    );
     return unsub;
-  }, [user]);
+  }, [user?.uid]);
 
-  const isSaved = (trendId: number) => savedTrends.some((s: any) => s.trendId === trendId);
+  const isSaved = (trendId: number) => savedTrends.some(s => s.trendId === trendId);
 
   const handleSaveTrend = async (trend: typeof TRENDS[number]) => {
-    if (!user) return;
-    const existing = savedTrends.find((s: any) => s.trendId === trend.id);
-    if (existing) {
-      await deleteDoc(doc(db, 'savedTrends', existing.id));
-    } else {
-      await addDoc(collection(db, 'savedTrends'), {
-        userId: user.uid,
-        trendId: trend.id,
-        name: trend.name,
-        type: trend.type,
-        creator: trend.creator,
-        usage: trend.usage,
-        reach: trend.reach,
-        trend: trend.trend,
-        createdAt: serverTimestamp(),
-      });
+    if (!user || busyRef.current.has(trend.id)) return;
+    busyRef.current.add(trend.id);
+    setBusyIds([...busyRef.current]);
+    // All copies (older builds could create duplicates)
+    const existing = savedTrends.filter(s => s.trendId === trend.id);
+    try {
+      if (existing.length > 0) {
+        await Promise.all(existing.map(s => deleteDoc(doc(db, 'savedTrends', s.id))));
+        toast('Trend je uklonjen iz spremljenih.', 'info');
+      } else {
+        await addDoc(collection(db, 'savedTrends'), {
+          userId: user.uid,
+          trendId: trend.id,
+          name: trend.name,
+          type: trend.type,
+          creator: trend.creator,
+          usage: trend.usage,
+          reach: trend.reach,
+          trend: trend.trend,
+          createdAt: serverTimestamp(),
+        });
+        toast('Trend je spremljen.', 'success');
+      }
+    } catch (err) {
+      console.error('[TrendTracker] Save failed:', err);
+      toast('Spremanje trenda nije uspjelo. Pokušaj ponovno.', 'error');
+    } finally {
+      busyRef.current.delete(trend.id);
+      setBusyIds([...busyRef.current]);
     }
   };
 
@@ -86,12 +114,12 @@ export default function TrendTracker() {
 
       <div className="px-[16px] mt-6">
         <p className="font-sans font-[400] text-[14px] text-[#8B8FA8] mb-6">
-          Pregledaj i filtriraj najpopularnije zvukove, formate i hashtagove.
+          Ručno odabrani zvukovi, formati i hashtagovi koje vrijedi isprobati ovaj tjedan. Brojke su okvirne procjene.
         </p>
 
         <div className="bg-[#151E30] rounded-[24px] border border-[rgba(255,255,255,0.06)] p-[20px] relative overflow-hidden">
           <div className="absolute top-0 right-0 bg-emerald-500/10 text-emerald-400 px-4 py-1.5 rounded-bl-[16px] font-heading font-[800] text-[10px] tracking-widest uppercase flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /> Live
+            <Flame className="w-3 h-3" /> Trendovi tjedna
           </div>
 
           <div className="flex items-center gap-[12px] mb-[16px]">
@@ -168,17 +196,19 @@ export default function TrendTracker() {
                 <div className="flex items-center justify-between gap-[8px] pt-[12px] border-t border-[rgba(255,255,255,0.04)]">
                   <div className="flex gap-4">
                     <div className="flex flex-col">
-                      <span className="font-mono text-[10px] text-[#4A4A5A] uppercase tracking-widest">Korištenja</span>
-                      <span className="font-sans font-[700] text-[14px] text-[#FFFFFF]">{trend.usage.toLocaleString()}</span>
+                      <span className="font-mono text-[10px] text-[#4A4A5A] uppercase tracking-widest">Korištenja (proc.)</span>
+                      <span className="font-sans font-[700] text-[14px] text-[#FFFFFF]">~{trend.usage.toLocaleString('hr-HR')}</span>
                     </div>
                     <div className="flex flex-col">
-                      <span className="font-mono text-[10px] text-[#4A4A5A] uppercase tracking-widest">Avg. Reach</span>
+                      <span className="font-mono text-[10px] text-[#4A4A5A] uppercase tracking-widest">Doseg (proc.)</span>
                       <span className="font-sans font-[700] text-[14px] text-[#FFFFFF]">{trend.reach}</span>
                     </div>
                   </div>
                   <button
                     onClick={() => handleSaveTrend(trend)}
-                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                    disabled={busyIds.includes(trend.id)}
+                    aria-label={isSaved(trend.id) ? 'Ukloni iz spremljenoga' : 'Spremi trend'}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all disabled:opacity-50 ${
                       isSaved(trend.id)
                         ? 'bg-[#3B82F6]/20 text-[#3B82F6]'
                         : 'bg-[rgba(255,255,255,0.05)] text-[#8B8FA8] hover:bg-[#3B82F6]/10 hover:text-[#3B82F6]'

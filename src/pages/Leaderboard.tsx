@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Trophy } from 'lucide-react';
-import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { UserProfile } from '../types/post';
 import XPBadge from '../components/ui/XPBadge';
@@ -13,8 +13,9 @@ interface LeaderboardEntry {
   username: string;
   avatar_url?: string;
   xp: number;
-  level: number;
 }
+
+const TOP_N = 20;
 
 const MEDAL_COLORS: Record<number, string> = {
   0: 'text-yellow-400',
@@ -35,33 +36,40 @@ export default function LeaderboardPage() {
       return;
     }
 
-    const q = query(collection(db, 'profiles'), orderBy('xp', 'desc'), limit(20));
+    setLoading(true);
+    // Active members only. Equality filter needs no composite index; xp may be
+    // missing on older docs (orderBy would drop them), so sort client-side.
+    const q = query(collection(db, 'profiles'), where('status', '==', 'active'));
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        setEntries(
-          snapshot.docs.map((d) => {
-            const data = d.data() as UserProfile;
-            return {
-              uid: d.id,
-              username: data.username || 'Nepoznat',
-              avatar_url: data.avatar_url,
-              xp: data.xp ?? 0,
-              level: data.level ?? 1,
-            };
-          }),
-        );
+        const list = snapshot.docs.map((d) => {
+          const data = d.data() as Partial<UserProfile>;
+          const xp = typeof data.xp === 'number' && isFinite(data.xp) ? data.xp : 0;
+          return {
+            uid: d.id,
+            username: data.username || 'Nepoznat',
+            avatar_url: data.avatar_url,
+            xp,
+          };
+        });
+        list.sort((a, b) => b.xp - a.xp || a.username.localeCompare(b.username, 'hr'));
+        setEntries(list.slice(0, TOP_N));
         setLoading(false);
         setError(null);
       },
       (err) => {
         console.warn('Leaderboard page snapshot error:', err.code);
-        setError('Greška pri učitavanju rang liste.');
+        setError(
+          err.code === 'permission-denied'
+            ? 'Rang lista je dostupna samo aktivnim članovima.'
+            : 'Greška pri učitavanju rang liste. Pokušaj ponovno kasnije.',
+        );
         setLoading(false);
       },
     );
     return unsubscribe;
-  }, []);
+  }, [currentUser?.uid]);
 
   return (
     <div className="flex flex-col w-full max-w-full overflow-hidden">
@@ -93,7 +101,7 @@ export default function LeaderboardPage() {
           entries.map((entry, index) => {
             const avatarSrc =
               entry.avatar_url ||
-              `https://api.dicebear.com/7.x/avataaars/svg?seed=${entry.username}`;
+              `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(entry.username)}`;
             const profilePath =
               currentUser?.uid === entry.uid ? '/profile' : `/profile/${entry.uid}`;
 
@@ -125,7 +133,7 @@ export default function LeaderboardPage() {
                 <div className="flex items-center gap-3 shrink-0">
                   <XPBadge xp={entry.xp} compact />
                   <span className="text-xs text-muted-foreground font-medium w-16 text-right">
-                    {entry.xp.toLocaleString()} XP
+                    {entry.xp.toLocaleString('hr-HR')} XP
                   </span>
                 </div>
               </Link>
