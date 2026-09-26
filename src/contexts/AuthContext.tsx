@@ -3,7 +3,7 @@ import { auth, db } from '../lib/firebase';
 import { onAuthStateChanged, User, signOut as firebaseSignOut } from 'firebase/auth';
 import { doc, onSnapshot, setDoc, serverTimestamp, increment } from 'firebase/firestore';
 import { UserProfile } from '../types/post';
-import { isAdminEmail } from '../lib/admin';
+import { saveAccountEmail } from '../lib/account';
 import { calculateLevel } from '../lib/xp';
 
 interface AuthContextType {
@@ -95,9 +95,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       firebaseSignOut(auth).catch(() => {});
     };
 
-    const emailAdmin = isAdminEmail(firebaseUser.email);
     const profileRef = doc(db, 'profiles', firebaseUser.uid);
     let stampedActivity = false;
+
+    // Keeps the private email record in sync, also for accounts still waiting
+    // for activation (they are signed out below, but admins need the email).
+    saveAccountEmail(firebaseUser.uid, firebaseUser.email)
+      .catch(err => console.warn('[AuthContext] Failed to save account email:', err));
 
     unsubProfile.current = onSnapshot(profileRef, (snap) => {
       if (!snap.exists()) {
@@ -106,7 +110,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const seed: UserProfile = {
           uid: firebaseUser.uid,
           username: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Kreator',
-          email: firebaseUser.email || '',
           status: 'inactive',
           xp: 0,
           level: 1,
@@ -120,7 +123,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       const data = snap.data() as UserProfile;
-      const admin = emailAdmin || data.isAdmin === true;
+      const admin = data.isAdmin === true;
 
       if (!admin && isAccessExpired(data.accessUntil)) {
         forceSignOut('Tvoj pristup platformi je istekao. Javi nam se za produljenje.');

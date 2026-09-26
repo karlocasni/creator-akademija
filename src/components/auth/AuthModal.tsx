@@ -12,7 +12,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useAuth, isAccessExpired } from '../../contexts/AuthContext';
-import { isAdminEmail } from '../../lib/admin';
+import { saveAccountEmail } from '../../lib/account';
 import { trackPixel } from '../../lib/consent';
 
 interface AuthModalProps {
@@ -118,9 +118,11 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
     beginAuthFlow();
     try {
       const { user } = await signInWithEmailAndPassword(auth, cleanEmail, password);
+      // Before any sign-out below, so admins see the email of accounts awaiting activation
+      await saveAccountEmail(user.uid, user.email).catch(() => {});
       const snap = await getDoc(doc(db, 'profiles', user.uid)).catch(() => null);
       const data = snap?.exists() ? snap.data() : null;
-      const admin = isAdminEmail(user.email) || data?.isAdmin === true;
+      const admin = data?.isAdmin === true;
 
       if (!admin && !user.emailVerified && data?.status !== 'active') {
         await signOut(auth);
@@ -159,7 +161,6 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
       await setDoc(doc(db, 'profiles', user.uid), {
         uid: user.uid,
         username: cleanUsername,
-        email: cleanEmail,
         status: 'inactive',
         xp: 0,
         level: 1,
@@ -169,6 +170,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
         tiktok: handle(tiktok),
         createdAt: new Date().toISOString(),
       });
+      await saveAccountEmail(user.uid, cleanEmail);
       await sendEmailVerification(user);
       await signOut(auth);
       trackPixel('Lead');

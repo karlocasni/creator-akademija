@@ -7,13 +7,9 @@ service firebase.storage {
       return firestore.get(/databases/(default)/documents/profiles/$(request.auth.uid)).data;
     }
 
-    // Keep the emails in sync with src/lib/admin.ts and firestore.rules
+    // Admins are marked with isAdmin on their Firestore profile
     function isAdmin() {
-      return request.auth != null && (
-        request.auth.token.email == 'brunovujcec6@gmail.com' ||
-        request.auth.token.email == 'ismael.hadzic17@gmail.com' ||
-        profile().get('isAdmin', false) == true
-      );
+      return request.auth != null && profile().get('isAdmin', false) == true;
     }
 
     function isStaff() {

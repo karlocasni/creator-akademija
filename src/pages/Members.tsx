@@ -8,7 +8,7 @@ import { db } from '../lib/firebase';
 import { UserProfile } from '../types/post';
 import XPBadge from '../components/ui/XPBadge';
 import { useAuth, isAccessExpired } from '../contexts/AuthContext';
-import { isAdminEmail } from '../lib/admin';
+import { saveAccountEmail } from '../lib/account';
 import { toast, confirmDialog } from '../lib/dialog';
 import CommunityTabs from '../components/layout/CommunityTabs';
 
@@ -76,7 +76,7 @@ export default function Members() {
   const isAdmin = isActualAdmin && profile?.isAdmin === true;
   const canView = isAdmin || profile?.isCreator === true;
 
-  const [allProfiles, setAllProfiles] = useState<MemberEntry[]>([]);
+  const [rawProfiles, setRawProfiles] = useState<MemberEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -97,6 +97,24 @@ export default function Members() {
   const [newYoutube, setNewYoutube] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+
+  // Emails are private (accounts/{uid}); only admins can read them.
+  const [emails, setEmails] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!currentUser || !isAdmin) {
+      setEmails({});
+      return;
+    }
+    return onSnapshot(
+      collection(db, 'accounts'),
+      (snap) => {
+        const map: Record<string, string> = {};
+        snap.docs.forEach((d) => { map[d.id] = (d.data().email as string) || ''; });
+        setEmails(map);
+      },
+      (err) => console.warn('Accounts snapshot error:', err.code),
+    );
+  }, [currentUser?.uid, isAdmin]);
 
   // No orderBy: it would silently drop docs without createdAt, and createdAt is
   // a mix of ISO strings and Timestamps. Sorted client-side instead.
@@ -120,15 +138,15 @@ export default function Members() {
             createdAt,
             createdMs: toMillis(createdAt),
             status: data.status === 'active' ? 'active' : 'inactive',
-            email: data.email || '',
+            email: '',
             isCreator: data.isCreator === true,
-            isAdmin: data.isAdmin === true || isAdminEmail(data.email),
+            isAdmin: data.isAdmin === true,
             accessUntil: data.accessUntil ?? null,
             mainTopic: data.mainTopic,
           } as MemberEntry;
         });
         list.sort((a, b) => b.createdMs - a.createdMs);
-        setAllProfiles(list);
+        setRawProfiles(list);
         setLoading(false);
         setError(null);
       },
@@ -140,6 +158,11 @@ export default function Members() {
     );
     return unsubscribe;
   }, [currentUser?.uid, canView]);
+
+  const allProfiles = useMemo(
+    () => rawProfiles.map((m) => ({ ...m, email: emails[m.uid] || '' })),
+    [rawProfiles, emails],
+  );
 
   const pending = useMemo(() => allProfiles.filter((m) => m.status !== 'active'), [allProfiles]);
   const members = useMemo(() => allProfiles.filter((m) => m.status === 'active'), [allProfiles]);
@@ -324,7 +347,6 @@ export default function Members() {
       if (newRole === 'creator' && !existingProfile?.mainTopic) profileData.mainTopic = 'Produkcija';
       if (!existingProfile) {
         profileData.uid = newUid;
-        profileData.email = email;
         profileData.xp = 0;
         profileData.level = 1;
         profileData.createdAt = new Date().toISOString();
@@ -334,6 +356,7 @@ export default function Members() {
       if (newYoutube.trim()) profileData.youtube = newYoutube.trim();
 
       await setDoc(doc(db, 'profiles', newUid), profileData, { merge: true });
+      if (!existingProfile) await saveAccountEmail(newUid, email);
 
       setShowAddModal(false);
       resetAddForm();
@@ -738,7 +761,6 @@ function ManageMemberModal({
 }: ManageMemberModalProps) {
   const [days, setDays] = useState(30);
   const [dateValue, setDateValue] = useState('');
-  const emailAdmin = isAdminEmail(m.email);
 
   useEffect(() => {
     setDateValue(m.accessUntil ? m.accessUntil.slice(0, 10) : '');
@@ -844,9 +866,7 @@ function ManageMemberModal({
           >
             {m.isCreator ? 'Ukloni mentor status' : 'Promakni u mentora'}
           </button>
-          {emailAdmin ? (
-            <p className="text-[11px] text-white/40">Glavni admin (po emailu) — admin prava se ne mogu ukloniti ovdje.</p>
-          ) : isSelf ? (
+          {isSelf ? (
             <p className="text-[11px] text-white/40">Ne možeš mijenjati vlastita admin prava.</p>
           ) : (
             <button

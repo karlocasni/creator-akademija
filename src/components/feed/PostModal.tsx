@@ -11,7 +11,6 @@ import {
 import { useMemberSearch } from '../../hooks/useMemberSearch';
 import MentionDropdown from '../ui/MentionDropdown';
 import { MediaError, formatDuration, isImageFile, isVideoFile, readVideoInfo } from '../../lib/media';
-import { isAdminEmail } from '../../lib/admin';
 import { bottomNavEventTarget } from '../layout/BottomNav';
 
 const MENTION_CHARS = '[\\p{L}\\p{N}._-]';
@@ -49,7 +48,7 @@ interface PostModalProps {
 export default function PostModal({ isOpen, onClose }: PostModalProps) {
   const { user, profile, isActualAdmin } = useAuth();
   const { enqueue } = useUpload();
-  const isAdmin = isActualAdmin || isAdminEmail(user?.email);
+  const isAdmin = isActualAdmin;
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');

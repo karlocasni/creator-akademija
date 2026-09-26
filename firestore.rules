@@ -21,13 +21,9 @@ service cloud.firestore {
       return get(myProfilePath()).data;
     }
 
-    // Keep the emails in sync with src/lib/admin.ts and storage.rules
+    // Admins are marked with isAdmin on their profile (only an admin can set it)
     function isAdmin() {
-      return isAuthed() && (
-        request.auth.token.email == 'brunovujcec6@gmail.com' ||
-        request.auth.token.email == 'ismael.hadzic17@gmail.com' ||
-        (exists(myProfilePath()) && myProfile().get('isAdmin', false) == true)
-      );
+      return isAuthed() && exists(myProfilePath()) && myProfile().get('isAdmin', false) == true;
     }
 
     function isCreator() {
@@ -105,6 +101,7 @@ service cloud.firestore {
         request.resource.data.get('isCreator', false) == false &&
         !('accessUntil' in request.resource.data) &&
         !('offsetDays' in request.resource.data) &&
+        !('email' in request.resource.data) &&
         request.resource.data.get('xp', 0) == 0
       );
 
@@ -118,6 +115,17 @@ service cloud.firestore {
         request.resource.data.xp == resource.data.get('xp', 0) + 100 && levelOk()
       );
 
+      allow delete: if isAdmin();
+    }
+
+    // Private account data (email) — never on the member-readable profile
+    match /accounts/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update: if isAdmin() || (
+        isOwner(userId) &&
+        request.resource.data.keys().hasOnly(['email', 'updatedAt']) &&
+        request.resource.data.email == request.auth.token.email.lower()
+      );
       allow delete: if isAdmin();
     }
 

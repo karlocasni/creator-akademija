@@ -21,7 +21,8 @@ export interface FirestoreChatMessage {
 export interface UserProfile {
   uid?: string;
   username: string;
-  email: string;
+  /** Legacy: emails now live in accounts/{uid}, not on the public profile */
+  email?: string;
   status: 'active' | 'inactive';
   phone_number?: string;
   avatar_url?: string;
